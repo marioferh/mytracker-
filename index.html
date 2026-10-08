@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0f">
+<title>Tiempo</title>
+<style>
+:root{--bg:#0b0b0f;--card:#15151b;--muted:#9696a3;--text:#f5f5f7;--line:#292933;--accent:#7c5cff;--danger:#ff5c6c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}
+main{max-width:720px;margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom))}
+h1{font-size:32px;margin:4px 0 20px}.sub{color:var(--muted);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px}
+.timer{text-align:center}.time{font-variant-numeric:tabular-nums;font-size:52px;font-weight:700;letter-spacing:-2px;margin:8px 0}
+select,input,button{font:inherit}select,input{width:100%;background:#202028;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px}
+button{border:0;border-radius:13px;padding:12px 16px;font-weight:650;cursor:pointer}
+.primary{background:var(--accent);color:white}.secondary{background:#24242d;color:white}.danger{background:#32161b;color:#ff8994}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#1d1d25;border-radius:15px;padding:14px}.num{font-size:23px;font-weight:700}.label{font-size:12px;color:var(--muted);margin-top:3px}
+.bar{height:9px;background:#292932;border-radius:9px;overflow:hidden;margin-top:8px}.fill{height:100%;background:var(--accent);border-radius:9px}
+.item{display:flex;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}.item small{color:var(--muted)}
+.section-title{font-size:17px;font-weight:700;margin-bottom:12px}.empty{color:var(--muted);text-align:center;padding:12px}
+footer{color:#777784;font-size:11px;text-align:center;padding:10px}
+</style>
+</head>
+<body>
+<main>
+<h1>Tiempo</h1><div class="card" style="padding:12px 14px;font-size:13px;color:#b7b7c2">Si la abres desde Archivos y los botones no responden, usa Safari: Compartir → Abrir en Safari. Esta app necesita JavaScript para funcionar.</div>
+<div class="card timer">
+  <div class="sub" id="status">Sin actividad</div>
+  <div class="time" id="clock">00:00:00</div>
+  <select id="category"></select>
+  <div class="row" style="margin-top:12px">
+    <button class="primary" id="start">Iniciar</button>
+    <button class="secondary" id="stop" disabled>Terminar</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title">Hoy</div>
+  <div class="stats">
+    <div class="stat"><div class="num" id="todayTotal">0m</div><div class="label">Tiempo registrado</div></div>
+    <div class="stat"><div class="num" id="sessions">0</div><div class="label">Sesiones</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title">Por categoría · hoy</div>
+  <div id="cats"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Historial</div>
+  <div id="history"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Categorías</div>
+  <div class="row">
+    <input id="newCat" placeholder="Nueva categoría">
+    <button class="secondary" id="addCat">Añadir</button>
+  </div>
+  <div id="catList" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Datos</div>
+  <div class="row">
+    <button class="secondary" id="export">Exportar</button>
+    <button class="secondary" id="importBtn">Importar</button>
+    <input type="file" id="file" accept=".json" hidden>
+  </div>
+  <button class="danger" id="wipe" style="width:100%;margin-top:10px">Borrar todos los datos</button>
+</div>
+<footer>Los datos se guardan únicamente en este navegador. Esta página no hace conexiones externas.</footer>
+</main>
+
+<script>
+const KEY="tiempo_privado_v1";
+let db=JSON.parse(localStorage.getItem(KEY)||'null')||{
+  categories:["Trabajo","Estudio","Ocio","Deporte","Personal"],
+  sessions:[],
+  active:null
+};
+function save(){localStorage.setItem(KEY,JSON.stringify(db));}
+const $=id=>document.getElementById(id);
+function fmt(sec){
+  sec=Math.max(0,Math.floor(sec)); let h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+  return [h,m,s].map((x,i)=>i===0?String(x).padStart(2,"0"):String(x).padStart(2,"0")).join(":");
+}
+function short(sec){
+  sec=Math.round(sec);let h=Math.floor(sec/3600),m=Math.floor(sec%3600/60);
+  return h?`${h}h ${m}m`:m?`${m}m`:`${sec}s`;
+}
+function dayKey(d){return new Date(d).toLocaleDateString("en-CA")}
+function renderCats(){
+  $("category").innerHTML=db.categories.map(c=>`<option>${esc(c)}</option>`).join("");
+  $("catList").innerHTML=db.categories.map((c,i)=>`<div class="item"><span>${esc(c)}</span>${db.categories.length>1?`<button class="danger delcat" data-i="${i}">Eliminar</button>`:""}</div>`).join("");
+}
+function render(){
+  renderCats();
+  const today=dayKey(Date.now()), ss=db.sessions.filter(x=>dayKey(x.start)===today);
+  const total=ss.reduce((a,x)=>a+(x.end-x.start)/1000,0);
+  $("todayTotal").textContent=short(total);$("sessions").textContent=ss.length;
+  const map={};ss.forEach(x=>map[x.category]=(map[x.category]||0)+(x.end-x.start)/1000);
+  const max=Math.max(...Object.values(map),1);
+  $("cats").innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([c,t])=>`<div style="margin:10px 0"><div class="row"><span>${esc(c)}</span><span>${short(t)}</span></div><div class="bar"><div class="fill" style="width:${t/max*100}%"></div></div></div>`).join("")||'<div class="empty">Todavía no hay tiempo registrado hoy.</div>';
+  const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,15);
+  $("history").innerHTML=recent.map(x=>`<div class="item"><div><b>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString()} · ${new Date(x.end).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</small></div><b>${short((x.end-x.start)/1000)}</b></div>`).join("")||'<div class="empty">Sin sesiones todavía.</div>';
+  if(db.active){$("status").textContent=db.active.category;$("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category}
+  else{$("status").textContent="Sin actividad";$("start").disabled=false;$("stop").disabled=true}
+}
+function esc(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
+$("start").onclick=()=>{db.active={category:$("category").value,start:Date.now()};save();render()};
+$("stop").onclick=()=>{if(!db.active)return;db.sessions.push({category:db.active.category,start:db.active.start,end:Date.now()});db.active=null;save();render();tick()};
+$("addCat").onclick=()=>{let c=$("newCat").value.trim();if(c&&!db.categories.includes(c)){db.categories.push(c);$("newCat").value="";save();render()}};
+document.addEventListener("click",e=>{
+  const b=e.target.closest(".delcat");
+  if(!b)return;
+  const i=Number(b.dataset.i), c=db.categories[i];
+  if(db.sessions.some(x=>x.category===c)||db.active?.category===c){
+    alert("No puedes eliminar una categoría que tiene sesiones registradas."); return;
+  }
+  db.categories.splice(i,1); save(); render();
+});
+$("export").onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tiempo-backup.json";a.click();URL.revokeObjectURL(a.href)};
+$("importBtn").onclick=()=>$("file").click();
+$("file").onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.categories||!x.sessions)throw 0;db=x;save();render();alert("Datos importados.")}catch{alert("Archivo no válido.")}};r.readAsText(f)};
+$("wipe").onclick=()=>{if(confirm("¿Borrar todas las sesiones y categorías?")){db={categories:["Trabajo","Estudio","Ocio","Deporte","Personal"],sessions:[],active:null};save();render();tick()}};
+render();tick();setInterval(()=>{tick();if(db.active&&Date.now()%5000<1000)render()},1000);
+</script>
+</body>
+</html>
