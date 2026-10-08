@@ -4,131 +4,250 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0b0f">
-<title>Tiempo</title>
+<title>Tiempo Privado</title>
 <style>
-:root{--bg:#0b0b0f;--card:#15151b;--muted:#9696a3;--text:#f5f5f7;--line:#292933;--accent:#7c5cff;--danger:#ff5c6c}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}
-main{max-width:720px;margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom))}
-h1{font-size:32px;margin:4px 0 20px}.sub{color:var(--muted);font-size:14px}
+:root{--bg:#0b0b0f;--card:#15151b;--card2:#1d1d25;--text:#f5f5f7;--muted:#9999a5;--line:#2b2b35;--accent:#7c5cff;--danger:#ff5969}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif}
+main{max-width:720px;margin:auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom))}
+h1{font-size:32px;letter-spacing:-1px;margin:4px 0 20px}.sub{color:var(--muted);font-size:13px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px}
-.timer{text-align:center}.time{font-variant-numeric:tabular-nums;font-size:52px;font-weight:700;letter-spacing:-2px;margin:8px 0}
-select,input,button{font:inherit}select,input{width:100%;background:#202028;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px}
-button{border:0;border-radius:13px;padding:12px 16px;font-weight:650;cursor:pointer}
-.primary{background:var(--accent);color:white}.secondary{background:#24242d;color:white}.danger{background:#32161b;color:#ff8994}
-.row{display:flex;gap:10px}.row>*{flex:1}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#1d1d25;border-radius:15px;padding:14px}.num{font-size:23px;font-weight:700}.label{font-size:12px;color:var(--muted);margin-top:3px}
+.section{font-size:17px;font-weight:700;margin-bottom:12px}.timer{text-align:center}
+.time{font-variant-numeric:tabular-nums;font-size:54px;font-weight:750;letter-spacing:-2px;margin:8px 0 16px}
+select,input{width:100%;background:#202028;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px;min-height:44px}
+button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44px;font-weight:650;cursor:pointer}
+.primary{background:var(--accent);color:#fff}.secondary{background:#25252e;color:#fff}.danger{background:#35171c;color:#ff929c}
+.row{display:flex;gap:10px}.row>*{min-width:0;flex:1}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:var(--card2);border-radius:15px;padding:14px}.num{font-size:23px;font-weight:700}.label{font-size:12px;color:var(--muted);margin-top:3px}
+.tabs{display:flex;gap:8px;margin-bottom:12px}.tabs button{flex:1}.tabs .active{background:var(--accent)}
 .bar{height:9px;background:#292932;border-radius:9px;overflow:hidden;margin-top:8px}.fill{height:100%;background:var(--accent);border-radius:9px}
-.item{display:flex;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}.item small{color:var(--muted)}
-.section-title{font-size:17px;font-weight:700;margin-bottom:12px}.empty{color:var(--muted);text-align:center;padding:12px}
-footer{color:#777784;font-size:11px;text-align:center;padding:10px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}
+.item small{color:var(--muted)}.item-actions{display:flex;gap:6px;flex-shrink:0}.item-actions button{min-height:36px;padding:6px 9px;font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:12px}.note{font-size:12px;color:var(--muted);line-height:1.45}
 </style>
 </head>
 <body>
 <main>
-<h1>Tiempo</h1><div class="card" style="padding:12px 14px;font-size:13px;color:#b7b7c2">Si la abres desde Archivos y los botones no responden, usa Safari: Compartir → Abrir en Safari. Esta app necesita JavaScript para funcionar.</div>
+<h1>Tiempo</h1>
+
 <div class="card timer">
   <div class="sub" id="status">Sin actividad</div>
   <div class="time" id="clock">00:00:00</div>
   <select id="category"></select>
   <div class="row" style="margin-top:12px">
-    <button class="primary" id="start">Iniciar</button>
-    <button class="secondary" id="stop" disabled>Terminar</button>
+    <button class="primary" id="start" type="button">Iniciar</button>
+    <button class="secondary" id="stop" type="button" disabled>Terminar</button>
   </div>
 </div>
 
 <div class="card">
-  <div class="section-title">Hoy</div>
+  <div class="section">Estadísticas</div>
+  <div class="tabs">
+    <button class="secondary active" data-period="day" type="button">Hoy</button>
+    <button class="secondary" data-period="week" type="button">7 días</button>
+  </div>
   <div class="stats">
-    <div class="stat"><div class="num" id="todayTotal">0m</div><div class="label">Tiempo registrado</div></div>
-    <div class="stat"><div class="num" id="sessions">0</div><div class="label">Sesiones</div></div>
+    <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total hoy</div></div>
+    <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label">Media diaria</div></div>
   </div>
+  <div id="periodCats" style="margin-top:14px"></div>
 </div>
 
 <div class="card">
-  <div class="section-title">Por categoría · hoy</div>
-  <div id="cats"></div>
-</div>
-
-<div class="card">
-  <div class="section-title">Historial</div>
+  <div class="section">Historial</div>
   <div id="history"></div>
 </div>
 
 <div class="card">
-  <div class="section-title">Categorías</div>
+  <div class="section">Categorías</div>
   <div class="row">
-    <input id="newCat" placeholder="Nueva categoría">
-    <button class="secondary" id="addCat">Añadir</button>
+    <input id="newCat" placeholder="Nueva categoría" maxlength="40">
+    <button class="secondary" id="addCat" type="button">Añadir</button>
   </div>
   <div id="catList" style="margin-top:8px"></div>
 </div>
 
 <div class="card">
-  <div class="section-title">Datos</div>
+  <div class="section">Datos</div>
   <div class="row">
-    <button class="secondary" id="export">Exportar</button>
-    <button class="secondary" id="importBtn">Importar</button>
+    <button class="secondary" id="export" type="button">Exportar</button>
+    <button class="secondary" id="importBtn" type="button">Importar</button>
     <input type="file" id="file" accept=".json" hidden>
   </div>
-  <button class="danger" id="wipe" style="width:100%;margin-top:10px">Borrar todos los datos</button>
+  <button class="danger" id="wipe" style="width:100%;margin-top:10px" type="button">Borrar todos los datos</button>
+  <p class="note" style="margin-bottom:0">Los registros se guardan únicamente en el almacenamiento local de este navegador. Esta aplicación no necesita una cuenta ni envía el historial a un servidor.</p>
 </div>
-<footer>Los datos se guardan únicamente en este navegador. Esta página no hace conexiones externas.</footer>
 </main>
 
 <script>
-const KEY="tiempo_privado_v1";
-let db=JSON.parse(localStorage.getItem(KEY)||'null')||{
-  categories:["Trabajo","Estudio","Ocio","Deporte","Personal"],
-  sessions:[],
-  active:null
-};
-function save(){localStorage.setItem(KEY,JSON.stringify(db));}
+(function(){
+"use strict";
+const KEY="tiempo_privado_v2";
+const DEFAULT=["Trabajo","Estudio","Ocio","Deporte","Personal"];
+let db;
+try{db=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){db=null}
+if(!db||!Array.isArray(db.categories)||!Array.isArray(db.sessions)){
+ db={categories:DEFAULT.slice(),sessions:[],active:null};
+}
+if(!db.active) db.active=null;
+
 const $=id=>document.getElementById(id);
-function fmt(sec){
-  sec=Math.max(0,Math.floor(sec)); let h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
-  return [h,m,s].map((x,i)=>i===0?String(x).padStart(2,"0"):String(x).padStart(2,"0")).join(":");
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
+const dayKey=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`};
+const fmt=sec=>{sec=Math.max(0,Math.floor(sec));return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,"0")).join(":")};
+const short=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m`:m?`${m}m`:s?`${s}s`:"0m"};
+
+function renderCategories(){
+ $("category").innerHTML=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+ $("catList").innerHTML=db.categories.map((c,i)=>`
+  <div class="item">
+   <span>${esc(c)}</span>
+   <div class="item-actions">
+    <button class="secondary renameCat" data-i="${i}" type="button">Editar</button>
+    ${db.categories.length>1?`<button class="danger deleteCat" data-i="${i}" type="button">Borrar</button>`:""}
+   </div>
+  </div>`).join("");
 }
-function short(sec){
-  sec=Math.round(sec);let h=Math.floor(sec/3600),m=Math.floor(sec%3600/60);
-  return h?`${h}h ${m}m`:m?`${m}m`:`${sec}s`;
+
+function renderPeriod(){
+ const now=new Date();let start=new Date(now);start.setHours(0,0,0,0);
+ const period=document.querySelector(".tabs .active")?.dataset.period||"day";
+ if(period==="week") start.setDate(start.getDate()-6);
+ const ss=db.sessions.filter(x=>x.end>start.getTime()&&x.start<Date.now());
+ const map={};let total=0;
+ ss.forEach(x=>{
+   const a=Math.max(x.start,start.getTime()),b=Math.min(x.end,Date.now()),t=Math.max(0,(b-a)/1000);
+   total+=t;map[x.category]=(map[x.category]||0)+t;
+ });
+ $("periodTotal").textContent=short(total);
+ $("periodLabel").textContent=period==="week"?"Total últimos 7 días":"Total hoy";
+ $("periodAvg").textContent=short(total/(period==="week"?7:1));
+ const max=Math.max(...Object.values(map),1);
+ $("periodCats").innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([c,t])=>`
+  <div style="margin:11px 0">
+   <div class="row"><span>${esc(c)}</span><span>${short(t)} · ${Math.round(t/Math.max(total,1)*100)}%</span></div>
+   <div class="bar"><div class="fill" style="width:${t/max*100}%"></div></div>
+  </div>`).join("")||'<div class="empty">No hay tiempo registrado en este período.</div>';
 }
-function dayKey(d){return new Date(d).toLocaleDateString("en-CA")}
-function renderCats(){
-  $("category").innerHTML=db.categories.map(c=>`<option>${esc(c)}</option>`).join("");
-  $("catList").innerHTML=db.categories.map((c,i)=>`<div class="item"><span>${esc(c)}</span>${db.categories.length>1?`<button class="danger delcat" data-i="${i}">Eliminar</button>`:""}</div>`).join("");
-}
+
 function render(){
-  renderCats();
-  const today=dayKey(Date.now()), ss=db.sessions.filter(x=>dayKey(x.start)===today);
-  const total=ss.reduce((a,x)=>a+(x.end-x.start)/1000,0);
-  $("todayTotal").textContent=short(total);$("sessions").textContent=ss.length;
-  const map={};ss.forEach(x=>map[x.category]=(map[x.category]||0)+(x.end-x.start)/1000);
-  const max=Math.max(...Object.values(map),1);
-  $("cats").innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([c,t])=>`<div style="margin:10px 0"><div class="row"><span>${esc(c)}</span><span>${short(t)}</span></div><div class="bar"><div class="fill" style="width:${t/max*100}%"></div></div></div>`).join("")||'<div class="empty">Todavía no hay tiempo registrado hoy.</div>';
-  const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,15);
-  $("history").innerHTML=recent.map(x=>`<div class="item"><div><b>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString()} · ${new Date(x.end).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</small></div><b>${short((x.end-x.start)/1000)}</b></div>`).join("")||'<div class="empty">Sin sesiones todavía.</div>';
-  if(db.active){$("status").textContent=db.active.category;$("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category}
-  else{$("status").textContent="Sin actividad";$("start").disabled=false;$("stop").disabled=true}
+ renderCategories();
+ const today=dayKey(Date.now());
+ const ss=db.sessions.filter(x=>dayKey(x.start)===today);
+ const total=ss.reduce((a,x)=>a+(x.end-x.start)/1000,0);
+ const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,30);
+ $("history").innerHTML=recent.map((x,i)=>`
+  <div class="item">
+   <div><b>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString()} · ${new Date(x.end).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</small></div>
+   <div class="item-actions">
+    <b style="padding-top:9px">${short((x.end-x.start)/1000)}</b>
+    <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Editar</button>
+    <button class="danger deleteSession" data-i="${db.sessions.indexOf(x)}" type="button">Borrar</button>
+   </div>
+  </div>`).join("")||'<div class="empty">Sin sesiones todavía.</div>';
+
+ if(db.active){
+   $("status").textContent=db.active.category;
+   $("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category;
+ }else{
+   $("status").textContent="Sin actividad";
+   $("start").disabled=false;$("stop").disabled=true;
+ }
+ renderPeriod();
 }
-function esc(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
 function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
-$("start").onclick=()=>{db.active={category:$("category").value,start:Date.now()};save();render()};
-$("stop").onclick=()=>{if(!db.active)return;db.sessions.push({category:db.active.category,start:db.active.start,end:Date.now()});db.active=null;save();render();tick()};
-$("addCat").onclick=()=>{let c=$("newCat").value.trim();if(c&&!db.categories.includes(c)){db.categories.push(c);$("newCat").value="";save();render()}};
-document.addEventListener("click",e=>{
-  const b=e.target.closest(".delcat");
-  if(!b)return;
-  const i=Number(b.dataset.i), c=db.categories[i];
-  if(db.sessions.some(x=>x.category===c)||db.active?.category===c){
-    alert("No puedes eliminar una categoría que tiene sesiones registradas."); return;
-  }
-  db.categories.splice(i,1); save(); render();
+
+$("start").addEventListener("click",()=>{
+ if(db.active)return;
+ db.active={category:$("category").value,start:Date.now()};save();render();
 });
-$("export").onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tiempo-backup.json";a.click();URL.revokeObjectURL(a.href)};
-$("importBtn").onclick=()=>$("file").click();
-$("file").onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.categories||!x.sessions)throw 0;db=x;save();render();alert("Datos importados.")}catch{alert("Archivo no válido.")}};r.readAsText(f)};
-$("wipe").onclick=()=>{if(confirm("¿Borrar todas las sesiones y categorías?")){db={categories:["Trabajo","Estudio","Ocio","Deporte","Personal"],sessions:[],active:null};save();render();tick()}};
-render();tick();setInterval(()=>{tick();if(db.active&&Date.now()%5000<1000)render()},1000);
+$("stop").addEventListener("click",()=>{
+ if(!db.active)return;
+ db.sessions.push({category:db.active.category,start:db.active.start,end:Date.now()});
+ db.active=null;save();render();tick();
+});
+$("addCat").addEventListener("click",()=>{
+ const c=$("newCat").value.trim();
+ if(!c)return;
+ if(db.categories.includes(c)){alert("Esa categoría ya existe.");return}
+ db.categories.push(c);$("newCat").value="";save();render();
+});
+$("newCat").addEventListener("keydown",e=>{if(e.key==="Enter")$("addCat").click()});
+
+document.addEventListener("click",e=>{
+ const b=e.target.closest(".renameCat");
+ if(b){
+   const i=Number(b.dataset.i),old=db.categories[i],name=prompt("Nombre de la categoría:",old);
+   if(name===null)return;
+   const n=name.trim();
+   if(!n||n===old)return;
+   if(db.categories.includes(n)){alert("Esa categoría ya existe.");return}
+   db.categories[i]=n;
+   db.sessions.forEach(x=>{if(x.category===old)x.category=n});
+   if(db.active?.category===old)db.active.category=n;
+   save();render();return;
+ }
+ const d=e.target.closest(".deleteCat");
+ if(d){
+   const i=Number(d.dataset.i),cat=db.categories[i];
+   if(db.sessions.some(x=>x.category===cat)||db.active?.category===cat){
+     alert("No puedes borrar una categoría que tiene sesiones. Primero cambia o borra esas sesiones.");return;
+   }
+   db.categories.splice(i,1);save();render();return;
+ }
+ const es=e.target.closest(".editSession");
+ if(es){
+   const i=Number(es.dataset.i),x=db.sessions[i];if(!x)return;
+   const cat=prompt("Categoría:",x.category);if(cat===null)return;
+   const n=cat.trim();if(!n)return;
+   let dur=prompt("Duración en minutos:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
+   const mins=Number(dur);
+   if(!Number.isFinite(mins)||mins<=0){alert("Duración no válida.");return}
+   if(!db.categories.includes(n))db.categories.push(n);
+   x.category=n;x.end=x.start+Math.round(mins*60000);
+   save();render();return;
+ }
+ const ds=e.target.closest(".deleteSession");
+ if(ds){
+   const i=Number(ds.dataset.i);if(!db.sessions[i])return;
+   if(confirm("¿Borrar esta sesión?")){db.sessions.splice(i,1);save();render();}
+ }
+ const pb=e.target.closest(".periods");
+});
+
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{
+ document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
+ b.classList.add("active");renderPeriod();
+}));
+
+$("export").addEventListener("click",()=>{
+ const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tiempo-backup.json";a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+});
+$("importBtn").addEventListener("click",()=>$("file").click());
+$("file").addEventListener("change",e=>{
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{
+   try{
+    const x=JSON.parse(r.result);
+    if(!Array.isArray(x.categories)||!Array.isArray(x.sessions))throw new Error();
+    db={categories:x.categories,sessions:x.sessions,active:x.active||null};save();render();alert("Datos importados.");
+   }catch(err){alert("Archivo no válido.");}
+   e.target.value="";
+ };
+ r.readAsText(f);
+});
+$("wipe").addEventListener("click",()=>{
+ if(confirm("¿Borrar todas las sesiones y categorías?")){
+   db={categories:DEFAULT.slice(),sessions:[],active:null};save();render();tick();
+ }
+});
+
+render();tick();setInterval(()=>{tick();if(db.active)renderPeriod()},1000);
+})();
 </script>
 </body>
 </html>
