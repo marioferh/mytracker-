@@ -1,43 +1,47 @@
 # Private Time
 
-Single-user time tracker. A small Node server (no npm dependencies) serves the UI and stores data as JSON on disk.
+Personal time tracker with two ways to run it:
 
-## Run with Docker (recommended)
+| Mode | Path | Storage |
+|------|------|---------|
+| **Static (GitHub Pages)** | [`index.html`](index.html) at repo root | Browser `localStorage` |
+| **Server / Docker** | [`docker/`](docker/) | JSON file on the server |
+
+## Static page (default)
+
+Open [`index.html`](index.html) locally, or use GitHub Pages:
+
+https://marioferh.github.io/private-time-tracker/
+
+Data stays in that browser. Use **Export** / **Import** for backups or to move data to the server version.
+
+## Server / Docker
+
+Files live under [`docker/`](docker/).
 
 ```bash
+cd docker
 cp .env.example .env
-# edit .env and set APP_PASSWORD
+# set APP_PASSWORD=...
 
+# with Docker
 docker compose up -d --build
+# open http://SERVER_IP:3000
+
+# or without Docker (Node 20+)
+mkdir -p data
+set -a; source .env; set +a
+DATA_DIR=./data PORT=3000 node server.js
 ```
 
-Open `http://SERVER_IP:3000`, sign in with `APP_PASSWORD`.
+Sign in with `APP_PASSWORD`. Data is stored in `/data/db.json` (Docker volume) or `docker/data/db.json` (bare Node).
 
-Data persists in the Docker volume `tracker_data` (`/data/db.json` inside the container). Restarts keep your sessions.
+### Migrate from the static page
 
-### One-time migration from browser localStorage
-
-If you already tracked time in the old local-only page:
-
-1. Open the old page and use **Export** to download `time-backup.json`.
-2. Deploy this server and sign in.
-3. Use **Import** and select that file. Data is written to the server.
+1. On GitHub Pages (or the static file): **Export** → `time-backup.json`
+2. On the server app: sign in → **Import** that file
 
 ### Notes
 
-- Export/Import remain available as a local backup.
-- Password over plain HTTP is fine on a trusted LAN. For the public internet, put HTTPS (reverse proxy) in front.
-- Sign out clears the auth cookie on this browser.
-
-## Run without Docker
-
-Needs Node 20+.
-
-```bash
-cp .env.example .env
-# set APP_PASSWORD
-APP_PASSWORD=your-password npm start
-# or: APP_PASSWORD=your-password node server.js
-```
-
-Optional: `PORT=3000` and `DATA_DIR=./data`.
+- Password over plain HTTP is fine on a trusted LAN / Tailscale. Use HTTPS if exposed publicly.
+- Docker needs access to Docker Hub to build (`node:20-alpine`). If the host cannot pull images, use the Node binary approach above.

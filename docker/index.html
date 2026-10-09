@@ -49,10 +49,25 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .cat-name{display:flex;align-items:center;gap:8px;min-width:0}
 .cat-color{width:44px;min-height:36px;padding:4px;border-radius:10px;border:1px solid var(--line);background:#202028;cursor:pointer}
 #statusDot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#loginGate{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+#loginGate[hidden]{display:none!important}
+#loginGate .card{width:100%;max-width:360px;margin:0}
+#loginError{color:var(--danger);font-size:13px;margin-top:10px;min-height:1.2em}
+#app{display:none}#app.ready{display:block}
+.save-status{font-size:12px;color:var(--muted);margin-top:8px}
 </style>
 </head>
 <body>
-<main>
+<div id="loginGate" hidden>
+  <div class="card">
+    <div class="section">Private Time</div>
+    <p class="note" style="margin-top:0">Enter the server password to continue.</p>
+    <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="primary" id="loginBtn" type="button" style="width:100%;margin-top:12px">Sign in</button>
+    <div id="loginError"></div>
+  </div>
+</div>
+<main id="app">
 <h1>Time</h1>
 
 <div class="card timer">
@@ -120,30 +135,94 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <input type="file" id="file" accept=".json" hidden>
   </div>
   <button class="danger" id="wipe" style="width:100%;margin-top:10px" type="button">Delete all data</button>
-  <p class="note" style="margin-bottom:0">Records are stored only in this browser&apos;s local storage. No account is required and history is never sent to a server.</p>
+  <button class="secondary" id="logout" style="width:100%;margin-top:10px" type="button">Sign out</button>
+  <p class="note save-status" id="saveStatus" style="margin-bottom:0">Data is stored on the server. Export is an optional local backup.</p>
 </div>
 </main>
 
 <script>
 (function(){
 "use strict";
-// Keep legacy key so existing localStorage data still loads.
-const KEY="tiempo_privado_v2";
 const DEFAULT=["work","read","sport","play","free"];
 const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
 const LOCALE="en-US";
-let db;
-try{db=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){db=null}
-if(!db||!Array.isArray(db.categories)||!Array.isArray(db.sessions)){
- db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};
-}
-if(!db.active) db.active=null;
-if(!db.colors||typeof db.colors!=="object") db.colors={};
-if(db.categories.length===0) db.categories=DEFAULT.slice();
+let db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};
+let saveTimer=null;
+let saveInFlight=false;
+let saveQueued=false;
+let ready=false;
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
+
+function setSaveStatus(msg){
+ const el=$("saveStatus");
+ if(el) el.textContent=msg;
+}
+
+async function api(path,opts){
+ const o=opts||{};
+ const res=await fetch(path,{
+  credentials:"same-origin",
+  ...o,
+  headers:{"Content-Type":"application/json",...(o.headers||{})}
+ });
+ if(res.status===401){
+  showLogin();
+  const err=new Error("Unauthorized");
+  err.status=401;
+  throw err;
+ }
+ if(!res.ok){
+  let msg="Request failed";
+  try{const j=await res.json();if(j.error)msg=j.error}catch(_){}
+  const err=new Error(msg);
+  err.status=res.status;
+  throw err;
+ }
+ if(res.status===204)return null;
+ return res.json();
+}
+
+function normalizeDb(x){
+ if(!x||!Array.isArray(x.categories)||!Array.isArray(x.sessions)){
+  return {categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};
+ }
+ const out={
+  categories:x.categories,
+  sessions:x.sessions,
+  active:x.active||null,
+  colors:x.colors&&typeof x.colors==="object"?x.colors:{}
+ };
+ if(out.categories.length===0) out.categories=DEFAULT.slice();
+ return out;
+}
+
+async function flushSave(){
+ if(!ready)return;
+ if(saveInFlight){saveQueued=true;return}
+ saveInFlight=true;
+ setSaveStatus("Saving…");
+ try{
+  await api("/api/data",{method:"PUT",body:JSON.stringify(db)});
+  setSaveStatus("Saved on server. Export is an optional local backup.");
+ }catch(err){
+  if(err.status!==401){
+   setSaveStatus("Save failed. Check your connection and try again.");
+   alert("Could not save to the server: "+err.message);
+  }
+ }finally{
+  saveInFlight=false;
+  if(saveQueued){saveQueued=false;flushSave()}
+ }
+}
+
+function save(){
+ if(!ready)return;
+ setSaveStatus("Saving…");
+ clearTimeout(saveTimer);
+ saveTimer=setTimeout(()=>{flushSave()},300);
+}
 
 function defaultColor(i){return PALETTE[i%PALETTE.length]}
 function ensureColors(){
@@ -153,7 +232,19 @@ function ensureColors(){
  if(JSON.stringify(db.colors)!==snap)save();
 }
 function catColor(c){return db.colors[c]||defaultColor(Math.max(0,db.categories.indexOf(c)))}
-ensureColors();
+
+function showLogin(msg){
+ ready=false;
+ $("app").classList.remove("ready");
+ $("loginGate").hidden=false;
+ $("loginError").textContent=msg||"";
+ $("loginPassword").value="";
+ setTimeout(()=>$("loginPassword").focus(),50);
+}
+function showApp(){
+ $("loginGate").hidden=true;
+ $("app").classList.add("ready");
+}
 const dayKey=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`};
 const fmt=sec=>{sec=Math.max(0,Math.floor(sec));return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,"0")).join(":")};
 const short=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m`:m?`${m}m`:s?`${s}s`:"0m"};
@@ -625,12 +716,15 @@ $("importBtn").addEventListener("click",()=>$("file").click());
 $("file").addEventListener("change",e=>{
  const f=e.target.files[0];if(!f)return;
  const r=new FileReader();
- r.onload=()=>{
+ r.onload=async()=>{
    try{
     const x=JSON.parse(r.result);
     if(!Array.isArray(x.categories)||!Array.isArray(x.sessions))throw new Error();
-    db={categories:x.categories,sessions:x.sessions,active:x.active||null,colors:x.colors&&typeof x.colors==="object"?x.colors:{}};ensureColors();save();render();alert("Data imported.");
-   }catch(err){alert("Invalid file.");}
+    db=normalizeDb(x);ensureColors();
+    clearTimeout(saveTimer);
+    await flushSave();
+    render();alert("Data imported.");
+   }catch(err){alert(err.status?("Import failed: "+err.message):"Invalid file.");}
    e.target.value="";
  };
  r.readAsText(f);
@@ -640,8 +734,49 @@ $("wipe").addEventListener("click",()=>{
    db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};ensureColors();save();render();tick();
  }
 });
+$("logout").addEventListener("click",async()=>{
+ try{await api("/api/logout",{method:"POST",body:"{}"})}catch(_){}
+ showLogin();
+});
 
-render();tick();setInterval(()=>{tick();if(db.active)renderPeriod()},1000);
+async function doLogin(){
+ const password=$("loginPassword").value;
+ $("loginError").textContent="";
+ $("loginBtn").disabled=true;
+ try{
+  await api("/api/login",{method:"POST",body:JSON.stringify({password})});
+  await bootApp();
+ }catch(err){
+  $("loginError").textContent=err.status===401?"Invalid password.":(err.message||"Login failed.");
+ }finally{
+  $("loginBtn").disabled=false;
+ }
+}
+$("loginBtn").addEventListener("click",doLogin);
+$("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();doLogin()}});
+
+async function bootApp(){
+ const data=await api("/api/data");
+ db=normalizeDb(data);
+ ready=true;
+ ensureColors();
+ showApp();
+ render();tick();
+ setSaveStatus("Saved on server. Export is an optional local backup.");
+}
+
+async function start(){
+ try{
+  const s=await api("/api/session");
+  if(s.authenticated) await bootApp();
+  else showLogin();
+ }catch(err){
+  showLogin("Cannot reach the server.");
+ }
+}
+
+setInterval(()=>{if(ready){tick();if(db.active)renderPeriod()}},1000);
+start();
 })();
 </script>
 </body>
