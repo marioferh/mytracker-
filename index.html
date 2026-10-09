@@ -18,11 +18,19 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .primary{background:var(--accent);color:#fff}.secondary{background:#25252e;color:#fff}.danger{background:#35171c;color:#ff929c}
 .row{display:flex;gap:10px}.row>*{min-width:0;flex:1}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:var(--card2);border-radius:15px;padding:14px}.num{font-size:23px;font-weight:700}.label{font-size:12px;color:var(--muted);margin-top:3px}
-.tabs{display:flex;gap:8px;margin-bottom:12px}.tabs button{flex:1}.tabs .active{background:var(--accent)}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.tabs button{flex:1;min-width:calc(25% - 6px);font-size:14px;padding:9px 6px}.tabs .active{background:var(--accent)}
+.period-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}.period-nav button{flex:0 0 auto;min-width:44px;padding:9px 12px}.period-nav .period-title{flex:1;text-align:center;font-size:14px;font-weight:650;line-height:1.25}
+.subsection{font-size:13px;font-weight:650;color:var(--muted);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.04em}
+.day-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.day-row:last-child{border-bottom:0}
+.day-row small{color:var(--muted);font-size:12px}.day-scroll{max-height:220px;overflow-y:auto;margin:0 -4px;padding:0 4px}
 .bar{height:9px;background:#292932;border-radius:9px;overflow:hidden;margin-top:8px}.fill{height:100%;background:var(--accent);border-radius:9px}
 .item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}
 .item small{color:var(--muted)}.item-actions{display:flex;gap:6px;flex-shrink:0}.item-actions button{min-height:36px;padding:6px 9px;font-size:13px}
 .empty{color:var(--muted);text-align:center;padding:12px}.note{font-size:12px;color:var(--muted);line-height:1.45}
+.cat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.cat-name{display:flex;align-items:center;gap:8px;min-width:0}
+.cat-color{width:44px;min-height:36px;padding:4px;border-radius:10px;border:1px solid var(--line);background:#202028;cursor:pointer}
+#statusDot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -30,7 +38,7 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 <h1>Tiempo</h1>
 
 <div class="card timer">
-  <div class="sub" id="status">Sin actividad</div>
+  <div class="sub" id="status"><span id="statusDot" hidden></span><span id="statusText">Sin actividad</span></div>
   <div class="time" id="clock">00:00:00</div>
   <select id="category"></select>
   <div class="row" style="margin-top:12px">
@@ -42,14 +50,27 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 <div class="card">
   <div class="section">Estadísticas</div>
   <div class="tabs">
-    <button class="secondary active" data-period="day" type="button">Hoy</button>
-    <button class="secondary" data-period="week" type="button">7 días</button>
+    <button class="secondary active" data-period="day" type="button">Día</button>
+    <button class="secondary" data-period="week" type="button">Semana</button>
+    <button class="secondary" data-period="month" type="button">Mes</button>
+    <button class="secondary" data-period="year" type="button">Año</button>
+  </div>
+  <div class="period-nav">
+    <button class="secondary" id="periodPrev" type="button" aria-label="Anterior">‹</button>
+    <div class="period-title" id="periodTitle">—</div>
+    <button class="secondary" id="periodNext" type="button" aria-label="Siguiente">›</button>
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="secondary" id="periodToday" type="button" style="flex:1">Ir a hoy</button>
   </div>
   <div class="stats">
-    <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total hoy</div></div>
-    <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label">Media diaria</div></div>
+    <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total</div></div>
+    <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Media diaria</div></div>
   </div>
-  <div id="periodCats" style="margin-top:14px"></div>
+  <div class="subsection">Por categoría</div>
+  <div id="periodCats"></div>
+  <div class="subsection" id="periodBreakdownLabel" hidden>Desglose</div>
+  <div class="day-scroll" id="periodBreakdown" hidden></div>
 </div>
 
 <div class="card">
@@ -83,12 +104,24 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 "use strict";
 const KEY="tiempo_privado_v2";
 const DEFAULT=["Trabajo","Estudio","Ocio","Deporte","Personal"];
+const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
 let db;
 try{db=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){db=null}
 if(!db||!Array.isArray(db.categories)||!Array.isArray(db.sessions)){
- db={categories:DEFAULT.slice(),sessions:[],active:null};
+ db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};
 }
 if(!db.active) db.active=null;
+if(!db.colors||typeof db.colors!=="object") db.colors={};
+
+function defaultColor(i){return PALETTE[i%PALETTE.length]}
+function ensureColors(){
+ const snap=JSON.stringify(db.colors);
+ db.categories.forEach((c,i)=>{if(!db.colors[c])db.colors[c]=defaultColor(i)});
+ Object.keys(db.colors).forEach(k=>{if(!db.categories.includes(k))delete db.colors[k]});
+ if(JSON.stringify(db.colors)!==snap)save();
+}
+function catColor(c){return db.colors[c]||defaultColor(Math.max(0,db.categories.indexOf(c)))}
+ensureColors();
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
@@ -96,13 +129,131 @@ const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
 const dayKey=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`};
 const fmt=sec=>{sec=Math.max(0,Math.floor(sec));return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,"0")).join(":")};
 const short=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m`:m?`${m}m`:s?`${s}s`:"0m"};
+const locDate={weekday:"short",day:"numeric",month:"short"};
+const locMonth={month:"long",year:"numeric"};
+let periodAnchor=new Date();
+
+const startOfDay=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x};
+const endOfDay=d=>{const x=new Date(d);x.setHours(23,59,59,999);return x};
+const startOfWeek=d=>{const x=startOfDay(d);const w=x.getDay();x.setDate(x.getDate()-(w===0?6:w-1));return x};
+const endOfWeek=d=>{const x=startOfWeek(d);x.setDate(x.getDate()+6);return endOfDay(x)};
+const startOfMonth=d=>startOfDay(new Date(d.getFullYear(),d.getMonth(),1));
+const endOfMonth=d=>endOfDay(new Date(d.getFullYear(),d.getMonth()+1,0));
+const startOfYear=d=>startOfDay(new Date(d.getFullYear(),0,1));
+const endOfYear=d=>endOfDay(new Date(d.getFullYear(),11,31));
+const isSameDay=(a,b)=>dayKey(a)===dayKey(b);
+
+function currentPeriod(){
+ return document.querySelector(".tabs .active")?.dataset.period||"day";
+}
+
+function periodBounds(period,anchor){
+ const a=new Date(anchor);
+ if(period==="day") return {start:startOfDay(a),end:endOfDay(a),spanDays:1};
+ if(period==="week") return {start:startOfWeek(a),end:endOfWeek(a),spanDays:7};
+ if(period==="month"){
+  const start=startOfMonth(a),end=endOfMonth(a);
+  return {start,end,spanDays:Math.round((end-start)/86400000)+1};
+ }
+ const start=startOfYear(a),end=endOfYear(a);
+ return {start,end,spanDays:Math.round((end-start)/86400000)+1};
+}
+
+function periodTitle(period,anchor){
+ const a=new Date(anchor);
+ if(period==="day"){
+  const t=a.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  return isSameDay(a,Date.now())?`Hoy · ${t}`:t;
+ }
+ if(period==="week"){
+  const {start,end}=periodBounds("week",a);
+  const s=start.toLocaleDateString("es-ES",{day:"numeric",month:"short"});
+  const e=end.toLocaleDateString("es-ES",{day:"numeric",month:"short",year:"numeric"});
+  return `${s} – ${e}`;
+ }
+ if(period==="month") return a.toLocaleDateString("es-ES",locMonth);
+ return String(a.getFullYear());
+}
+
+function clipSessionSeconds(x,rangeStart,rangeEnd){
+ const now=Date.now();
+ const endCap=Math.min(rangeEnd.getTime(),now);
+ if(x.end<=rangeStart.getTime()||x.start>=endCap)return 0;
+ const a=Math.max(x.start,rangeStart.getTime()),b=Math.min(x.end,endCap);
+ return Math.max(0,(b-a)/1000);
+}
+
+function sessionsInPeriod(period,anchor){
+ const {start,end}=periodBounds(period,anchor);
+ return db.sessions.filter(x=>x.end>start.getTime()&&x.start<end.getTime()+1);
+}
+
+function aggregateByCategory(sessions,rangeStart,rangeEnd){
+ const map={};let total=0;
+ sessions.forEach(x=>{
+  const t=clipSessionSeconds(x,rangeStart,rangeEnd);
+  if(t<=0)return;
+  total+=t;map[x.category]=(map[x.category]||0)+t;
+ });
+ return {map,total};
+}
+
+function aggregateByDayKey(sessions,rangeStart,rangeEnd){
+ const by={};
+ sessions.forEach(x=>{
+  if(x.end<=rangeStart.getTime()||x.start>rangeEnd.getTime())return;
+  let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
+  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime())));
+  while(d<=last){
+   const dk=dayKey(d);
+   const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
+   const a=Math.max(x.start,rangeStart.getTime(),dayStart);
+   const b=Math.min(x.end,rangeEnd.getTime(),dayEnd,Date.now());
+   const sec=Math.max(0,(b-a)/1000);
+   if(sec>0)by[dk]=(by[dk]||0)+sec;
+   d.setDate(d.getDate()+1);
+  }
+ });
+ return by;
+}
+
+function aggregateByMonth(sessions,rangeStart,rangeEnd){
+ const by={};
+ sessions.forEach(x=>{
+  const t=clipSessionSeconds(x,rangeStart,rangeEnd);
+  if(t<=0)return;
+  const startM=new Date(rangeStart.getFullYear(),rangeStart.getMonth(),1);
+  for(let m=0;m<12;m++){
+   const ms=startOfMonth(new Date(rangeStart.getFullYear(),m,1));
+   const me=endOfMonth(ms);
+   const a=Math.max(x.start,ms.getTime(),rangeStart.getTime());
+   const b=Math.min(x.end,me.getTime(),rangeEnd.getTime(),Date.now());
+   const sec=Math.max(0,(b-a)/1000);
+   if(sec>0){
+    const key=`${ms.getFullYear()}-${String(m+1).padStart(2,"0")}`;
+    by[key]=(by[key]||0)+sec;
+   }
+  }
+ });
+ return by;
+}
+
+function shiftAnchor(period,dir){
+ const a=new Date(periodAnchor);
+ if(period==="day") a.setDate(a.getDate()+dir);
+ else if(period==="week") a.setDate(a.getDate()+7*dir);
+ else if(period==="month") a.setMonth(a.getMonth()+dir);
+ else a.setFullYear(a.getFullYear()+dir);
+ periodAnchor=a;
+}
 
 function renderCategories(){
  $("category").innerHTML=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
  $("catList").innerHTML=db.categories.map((c,i)=>`
   <div class="item">
-   <span>${esc(c)}</span>
+   <span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span>
    <div class="item-actions">
+    <input type="color" class="cat-color pickColor" data-i="${i}" value="${esc(catColor(c))}" title="Color" aria-label="Color de ${esc(c)}">
     <button class="secondary renameCat" data-i="${i}" type="button">Editar</button>
     ${db.categories.length>1?`<button class="danger deleteCat" data-i="${i}" type="button">Borrar</button>`:""}
    </div>
@@ -110,24 +261,64 @@ function renderCategories(){
 }
 
 function renderPeriod(){
- const now=new Date();let start=new Date(now);start.setHours(0,0,0,0);
- const period=document.querySelector(".tabs .active")?.dataset.period||"day";
- if(period==="week") start.setDate(start.getDate()-6);
- const ss=db.sessions.filter(x=>x.end>start.getTime()&&x.start<Date.now());
- const map={};let total=0;
- ss.forEach(x=>{
-   const a=Math.max(x.start,start.getTime()),b=Math.min(x.end,Date.now()),t=Math.max(0,(b-a)/1000);
-   total+=t;map[x.category]=(map[x.category]||0)+t;
- });
+ const period=currentPeriod();
+ const {start,end,spanDays}=periodBounds(period,periodAnchor);
+ $("periodTitle").textContent=periodTitle(period,periodAnchor);
+ const ss=sessionsInPeriod(period,periodAnchor);
+ const {map,total}=aggregateByCategory(ss,start,end);
+ const elapsedDays=period==="day"?1:Math.min(spanDays,Math.max(1,Math.ceil((Math.min(Date.now(),end.getTime())-start.getTime())/86400000)));
  $("periodTotal").textContent=short(total);
- $("periodLabel").textContent=period==="week"?"Total últimos 7 días":"Total hoy";
- $("periodAvg").textContent=short(total/(period==="week"?7:1));
+ $("periodLabel").textContent="Total en el período";
+ $("periodAvg").textContent=short(total/elapsedDays);
+ $("periodAvgLabel").textContent=period==="day"?"Total del día":"Media diaria";
  const max=Math.max(...Object.values(map),1);
  $("periodCats").innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([c,t])=>`
   <div style="margin:11px 0">
-   <div class="row"><span>${esc(c)}</span><span>${short(t)} · ${Math.round(t/Math.max(total,1)*100)}%</span></div>
-   <div class="bar"><div class="fill" style="width:${t/max*100}%"></div></div>
+   <div class="row"><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span><span>${short(t)} · ${Math.round(t/Math.max(total,1)*100)}%</span></div>
+   <div class="bar"><div class="fill" style="width:${t/max*100}%;background:${esc(catColor(c))}"></div></div>
   </div>`).join("")||'<div class="empty">No hay tiempo registrado en este período.</div>';
+
+ const bl=$("periodBreakdownLabel"),bd=$("periodBreakdown");
+ if(period==="day"){
+  bl.hidden=true;bd.hidden=true;return;
+ }
+ bl.hidden=false;bd.hidden=false;
+ if(period==="year"){
+  bl.textContent="Por mes";
+  const byMonth=aggregateByMonth(ss,start,end);
+  const monthNames=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const rows=[];
+  for(let m=0;m<12;m++){
+   const key=`${start.getFullYear()}-${String(m+1).padStart(2,"0")}`;
+   const t=byMonth[key]||0;
+   rows.push({label:monthNames[m],sub:"",t});
+  }
+  const maxB=Math.max(...rows.map(r=>r.t),1);
+  bd.innerHTML=rows.map(r=>`
+   <div class="day-row">
+    <span>${esc(r.label)}</span>
+    <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/Math.max(total,1)*100)}%</small>`:""}</span>
+   </div>
+   <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("");
+  return;
+ }
+ bl.textContent=period==="week"?"Por día":"Por día del mes";
+ const byDay=aggregateByDayKey(ss,start,end);
+ const rows=[];
+ for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+  const dk=dayKey(d);
+  const t=byDay[dk]||0;
+  const label=d.toLocaleDateString("es-ES",locDate);
+  const sub=isSameDay(d,Date.now())?"hoy":"";
+  rows.push({label,sub,t});
+ }
+ const maxB=Math.max(...rows.map(r=>r.t),1);
+ bd.innerHTML=rows.map(r=>`
+  <div class="day-row">
+   <div><span>${esc(r.label)}</span>${r.sub?` <small>${esc(r.sub)}</small>`:""}</div>
+   <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/Math.max(total,1)*100)}%</small>`:""}</span>
+  </div>
+  <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("")||'<div class="empty">Sin datos.</div>';
 }
 
 function render(){
@@ -138,7 +329,7 @@ function render(){
  const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,30);
  $("history").innerHTML=recent.map((x,i)=>`
   <div class="item">
-   <div><b>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString()} · ${new Date(x.end).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</small></div>
+   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString()} · ${new Date(x.end).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</small></div>
    <div class="item-actions">
     <b style="padding-top:9px">${short((x.end-x.start)/1000)}</b>
     <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Editar</button>
@@ -147,10 +338,14 @@ function render(){
   </div>`).join("")||'<div class="empty">Sin sesiones todavía.</div>';
 
  if(db.active){
-   $("status").textContent=db.active.category;
+   const col=catColor(db.active.category);
+   $("statusText").textContent=db.active.category;
+   $("statusDot").hidden=false;$("statusDot").style.background=col;
+   $("clock").style.color=col;
    $("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category;
  }else{
-   $("status").textContent="Sin actividad";
+   $("statusText").textContent="Sin actividad";
+   $("statusDot").hidden=true;$("clock").style.color="";
    $("start").disabled=false;$("stop").disabled=true;
  }
  renderPeriod();
@@ -171,9 +366,19 @@ $("addCat").addEventListener("click",()=>{
  const c=$("newCat").value.trim();
  if(!c)return;
  if(db.categories.includes(c)){alert("Esa categoría ya existe.");return}
- db.categories.push(c);$("newCat").value="";save();render();
+ db.categories.push(c);
+ db.colors[c]=defaultColor(db.categories.length-1);
+ $("newCat").value="";save();render();
 });
 $("newCat").addEventListener("keydown",e=>{if(e.key==="Enter")$("addCat").click()});
+
+document.addEventListener("input",e=>{
+ const pc=e.target.closest(".pickColor");
+ if(!pc)return;
+ const i=Number(pc.dataset.i),cat=db.categories[i];
+ if(!cat)return;
+ db.colors[cat]=pc.value;save();render();
+});
 
 document.addEventListener("click",e=>{
  const b=e.target.closest(".renameCat");
@@ -184,6 +389,8 @@ document.addEventListener("click",e=>{
    if(!n||n===old)return;
    if(db.categories.includes(n)){alert("Esa categoría ya existe.");return}
    db.categories[i]=n;
+   db.colors[n]=db.colors[old]||defaultColor(i);
+   delete db.colors[old];
    db.sessions.forEach(x=>{if(x.category===old)x.category=n});
    if(db.active?.category===old)db.active.category=n;
    save();render();return;
@@ -194,6 +401,7 @@ document.addEventListener("click",e=>{
    if(db.sessions.some(x=>x.category===cat)||db.active?.category===cat){
      alert("No puedes borrar una categoría que tiene sesiones. Primero cambia o borra esas sesiones.");return;
    }
+   delete db.colors[cat];
    db.categories.splice(i,1);save();render();return;
  }
  const es=e.target.closest(".editSession");
@@ -204,7 +412,10 @@ document.addEventListener("click",e=>{
    let dur=prompt("Duración en minutos:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
    const mins=Number(dur);
    if(!Number.isFinite(mins)||mins<=0){alert("Duración no válida.");return}
-   if(!db.categories.includes(n))db.categories.push(n);
+   if(!db.categories.includes(n)){
+     db.categories.push(n);
+     db.colors[n]=defaultColor(db.categories.length-1);
+   }
    x.category=n;x.end=x.start+Math.round(mins*60000);
    save();render();return;
  }
@@ -213,13 +424,15 @@ document.addEventListener("click",e=>{
    const i=Number(ds.dataset.i);if(!db.sessions[i])return;
    if(confirm("¿Borrar esta sesión?")){db.sessions.splice(i,1);save();render();}
  }
- const pb=e.target.closest(".periods");
 });
 
 document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{
  document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
  b.classList.add("active");renderPeriod();
 }));
+$("periodPrev").addEventListener("click",()=>{shiftAnchor(currentPeriod(),-1);renderPeriod()});
+$("periodNext").addEventListener("click",()=>{shiftAnchor(currentPeriod(),1);renderPeriod()});
+$("periodToday").addEventListener("click",()=>{periodAnchor=new Date();renderPeriod()});
 
 $("export").addEventListener("click",()=>{
  const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
@@ -234,7 +447,7 @@ $("file").addEventListener("change",e=>{
    try{
     const x=JSON.parse(r.result);
     if(!Array.isArray(x.categories)||!Array.isArray(x.sessions))throw new Error();
-    db={categories:x.categories,sessions:x.sessions,active:x.active||null};save();render();alert("Datos importados.");
+    db={categories:x.categories,sessions:x.sessions,active:x.active||null,colors:x.colors&&typeof x.colors==="object"?x.colors:{}};ensureColors();save();render();alert("Datos importados.");
    }catch(err){alert("Archivo no válido.");}
    e.target.value="";
  };
@@ -242,7 +455,7 @@ $("file").addEventListener("change",e=>{
 });
 $("wipe").addEventListener("click",()=>{
  if(confirm("¿Borrar todas las sesiones y categorías?")){
-   db={categories:DEFAULT.slice(),sessions:[],active:null};save();render();tick();
+   db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};ensureColors();save();render();tick();
  }
 });
 
