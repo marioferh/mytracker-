@@ -104,7 +104,7 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 "use strict";
 // Keep legacy key so existing localStorage data still loads.
 const KEY="tiempo_privado_v2";
-const DEFAULT=["Work","Study","Leisure","Sport","Personal"];
+const DEFAULT=["work","read","sport","play","free"];
 const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
 const LOCALE="en-US";
 let db;
@@ -114,6 +114,11 @@ if(!db||!Array.isArray(db.categories)||!Array.isArray(db.sessions)){
 }
 if(!db.active) db.active=null;
 if(!db.colors||typeof db.colors!=="object") db.colors={};
+if(db.categories.length===0) db.categories=DEFAULT.slice();
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
 
 function defaultColor(i){return PALETTE[i%PALETTE.length]}
 function ensureColors(){
@@ -124,10 +129,6 @@ function ensureColors(){
 }
 function catColor(c){return db.colors[c]||defaultColor(Math.max(0,db.categories.indexOf(c)))}
 ensureColors();
-
-const $=id=>document.getElementById(id);
-const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
 const dayKey=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`};
 const fmt=sec=>{sec=Math.max(0,Math.floor(sec));return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,"0")).join(":")};
 const short=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m`:m?`${m}m`:s?`${s}s`:"0m"};
@@ -359,15 +360,16 @@ $("stop").addEventListener("click",()=>{
  db.sessions.push({category:db.active.category,start:db.active.start,end:Date.now()});
  db.active=null;save();render();tick();
 });
-$("addCat").addEventListener("click",()=>{
+function addCategory(){
  const c=$("newCat").value.trim();
- if(!c)return;
- if(db.categories.includes(c)){alert("That category already exists.");return}
+ if(!c){alert("Enter a category name.");return}
+ if(db.categories.some(x=>x.toLowerCase()===c.toLowerCase())){alert("That category already exists.");return}
  db.categories.push(c);
  db.colors[c]=defaultColor(db.categories.length-1);
  $("newCat").value="";save();render();
-});
-$("newCat").addEventListener("keydown",e=>{if(e.key==="Enter")$("addCat").click()});
+}
+$("addCat").addEventListener("click",addCategory);
+$("newCat").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCategory()}});
 
 document.addEventListener("input",e=>{
  const pc=e.target.closest(".pickColor");
