@@ -49,6 +49,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .cat-name{display:flex;align-items:center;gap:8px;min-width:0}
 .cat-color{width:44px;min-height:36px;padding:4px;border-radius:10px;border:1px solid var(--line);background:#202028;cursor:pointer}
 #statusDot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#tagRow{margin-top:10px}#tagRow[hidden]{display:none!important}
+.tag-chip{display:inline-block;font-size:12px;color:var(--muted);font-weight:500}
 </style>
 </head>
 <body>
@@ -59,6 +61,10 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   <div class="sub" id="status"><span id="statusDot" hidden></span><span id="statusText">Idle</span></div>
   <div class="time" id="clock">00:00:00</div>
   <select id="category"></select>
+  <div id="tagRow" hidden>
+    <input id="sessionTag" list="tagList" placeholder="Book title" maxlength="80" autocomplete="off">
+    <datalist id="tagList"></datalist>
+  </div>
   <div class="row" style="margin-top:12px">
     <button class="primary" id="start" type="button">Start</button>
     <button class="secondary" id="stop" type="button" disabled>Stop</button>
@@ -94,6 +100,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   <div id="periodDonut"></div>
   <div class="subsection">By category</div>
   <div id="periodCats"></div>
+  <div class="subsection" id="periodTagsLabel" hidden>By book</div>
+  <div id="periodTags" hidden></div>
   <div class="subsection" id="periodBreakdownLabel" hidden>Breakdown</div>
   <div class="day-scroll" id="periodBreakdown" hidden></div>
 </div>
@@ -130,6 +138,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 // Keep legacy key so existing localStorage data still loads.
 const KEY="tiempo_privado_v2";
 const DEFAULT=["work","read","sport","play","free"];
+const TAG_CATEGORY="read";
+const UNTAGGED="(no book)";
 const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
 const LOCALE="en-US";
 let db;
@@ -161,10 +171,38 @@ const locDate={weekday:"short",day:"numeric",month:"short"};
 const locMonth={month:"long",year:"numeric"};
 let periodAnchor=new Date();
 let selectedStatCat=null;
+let selectedStatTag=null;
 
+function isTagCategory(c){return String(c||"").toLowerCase()===TAG_CATEGORY}
+function sessionTag(x){return(x&&x.tag&&String(x.tag).trim())||""}
+function tagLabel(tag){return tag?tag:UNTAGGED}
+function knownTags(cat){
+ const set=new Set();
+ db.sessions.forEach(x=>{if(x.category===cat&&sessionTag(x))set.add(sessionTag(x))});
+ if(db.active&&db.active.category===cat&&sessionTag(db.active))set.add(sessionTag(db.active));
+ return [...set].sort((a,b)=>a.localeCompare(b,LOCALE));
+}
+function updateTagRow(){
+ const cat=$("category").value;
+ const show=isTagCategory(cat);
+ $("tagRow").hidden=!show;
+ if(!show)return;
+ $("tagList").innerHTML=knownTags(cat).map(t=>`<option value="${esc(t)}"></option>`).join("");
+ if(db.active&&isTagCategory(db.active.category))$("sessionTag").value=sessionTag(db.active);
+}
+function matchesFocus(x){
+ if(selectedStatCat&&x.category!==selectedStatCat)return false;
+ if(selectedStatTag!==null&&sessionTag(x)!==selectedStatTag)return false;
+ return true;
+}
 function setStatCat(cat){
- if(selectedStatCat===cat) selectedStatCat=null;
- else selectedStatCat=cat;
+ if(selectedStatCat===cat){selectedStatCat=null;selectedStatTag=null}
+ else{selectedStatCat=cat;selectedStatTag=null}
+ renderPeriod();
+}
+function setStatTag(tag){
+ if(selectedStatTag===tag) selectedStatTag=null;
+ else selectedStatTag=tag;
  renderPeriod();
 }
 
@@ -175,12 +213,26 @@ function setPeriodTab(period){
  renderPeriod();
 }
 
-function categorySeconds(cat,period,anchor){
+function categorySeconds(cat,period,anchor,tag){
  const {start,end}=periodBounds(period,anchor);
- const ss=sessionsInPeriod(period,anchor).filter(x=>x.category===cat);
+ const ss=sessionsInPeriod(period,anchor).filter(x=>{
+  if(x.category!==cat)return false;
+  if(tag!==undefined&&tag!==null&&sessionTag(x)!==tag)return false;
+  return true;
+ });
  let total=0;
  ss.forEach(x=>{total+=clipSessionSeconds(x,start,end)});
  return total;
+}
+function aggregateByTag(sessions,rangeStart,rangeEnd){
+ const map={};let total=0;
+ sessions.forEach(x=>{
+  const t=clipSessionSeconds(x,rangeStart,rangeEnd);
+  if(t<=0)return;
+  const key=sessionTag(x);
+  total+=t;map[key]=(map[key]||0)+t;
+ });
+ return {map,total};
 }
 
 const startOfDay=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x};
@@ -385,9 +437,10 @@ function renderFocusStats(focus){
  }
  all.hidden=true;box.hidden=false;
  const col=catColor(focus);
- const dayT=categorySeconds(focus,"day",periodAnchor);
- const weekT=categorySeconds(focus,"week",periodAnchor);
- const monthT=categorySeconds(focus,"month",periodAnchor);
+ const tag=selectedStatTag;
+ const dayT=categorySeconds(focus,"day",periodAnchor,tag);
+ const weekT=categorySeconds(focus,"week",periodAnchor,tag);
+ const monthT=categorySeconds(focus,"month",periodAnchor,tag);
  $("focusDay").textContent=short(dayT);
  $("focusWeek").textContent=short(weekT);
  $("focusMonth").textContent=short(monthT);
@@ -400,22 +453,47 @@ function renderFocusStats(focus){
  });
 }
 
-function renderDaySessions(sessions,rangeStart,rangeEnd,focus){
+function renderTagBars(entries,total,fillColor){
+ const el=$("periodTags"),lab=$("periodTagsLabel");
+ if(!entries.length){
+  lab.hidden=true;el.hidden=true;return;
+ }
+ lab.hidden=false;el.hidden=false;
+ lab.textContent=selectedStatTag!==null?`By book · ${tagLabel(selectedStatTag)}`:"By book";
+ const max=Math.max(...entries.map(e=>e[1]),1);
+ el.innerHTML=`<div class="hbar-list">${entries.map(([tag,t])=>{
+  const pct=Math.round(t/Math.max(total,1)*100);
+  const w=Math.max(2,(t/max)*100);
+  const cls=["hbar-row","cat-pick","tag-pick"];
+  if(selectedStatTag===tag) cls.push("selected");
+  else if(selectedStatTag!==null) cls.push("dim");
+  return `<button type="button" class="${cls.join(" ")}" data-tag="${esc(tag)}">
+   <span class="cat-name">${esc(tagLabel(tag))}</span>
+   <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:${esc(fillColor)}"></div></div>
+   <span class="hbar-val">${short(t)} · ${pct}%</span>
+  </button>`;
+ }).join("")}</div>`;
+}
+
+function renderDaySessions(sessions,rangeStart,rangeEnd){
  const list=sessions
   .map(x=>{
    const t=clipSessionSeconds(x,rangeStart,rangeEnd);
    if(t<=0)return null;
-   if(focus&&x.category!==focus)return null;
+   if(!matchesFocus(x))return null;
    return {x,t};
   })
   .filter(Boolean)
   .sort((a,b)=>a.x.start-b.x.start);
  if(!list.length) return '<div class="empty">No sessions in this day.</div>';
- return list.map(({x,t})=>`
-  <div class="day-row">
-   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(x.category)}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+ return list.map(({x,t})=>{
+  const tag=sessionTag(x);
+  const title=tag?`${x.category} · ${tag}`:x.category;
+  return `<div class="day-row">
+   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(title)}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
    <span>${short(t)}</span>
-  </div>`).join("");
+  </div>`;
+ }).join("");
 }
 
 function renderPeriod(){
@@ -427,7 +505,9 @@ function renderPeriod(){
  if(selectedStatCat&&!db.categories.includes(selectedStatCat)) selectedStatCat=null;
  const elapsedDays=period==="day"?1:Math.min(spanDays,Math.max(1,Math.ceil((Math.min(Date.now(),end.getTime())-start.getTime())/86400000)));
  const focus=selectedStatCat;
- const focusTotal=focus?(map[focus]||0):total;
+ if(selectedStatTag!==null&&(!focus||!isTagCategory(focus))) selectedStatTag=null;
+ const ssFocus=ss.filter(matchesFocus);
+ const focusTotal=focus?ssFocus.reduce((a,x)=>a+clipSessionSeconds(x,start,end),0):total;
 
  if(!focus){
   $("periodTotal").textContent=short(total);
@@ -448,19 +528,27 @@ function renderPeriod(){
  renderDonut(entries,total);
  renderCategoryBars(entries,total);
 
- const ssFocus=focus?ss.filter(x=>x.category===focus):ss;
+ if(focus&&isTagCategory(focus)){
+  const tagAgg=aggregateByTag(ss.filter(x=>x.category===focus),start,end);
+  const tagEntries=Object.entries(tagAgg.map).sort((a,b)=>b[1]-a[1]);
+  renderTagBars(tagEntries,tagAgg.total||1,catColor(focus));
+ }else{
+  $("periodTagsLabel").hidden=true;$("periodTags").hidden=true;
+ }
+
  const bl=$("periodBreakdownLabel"),bd=$("periodBreakdown");
  bl.hidden=false;bd.hidden=false;
  const fillColor=focus?catColor(focus):"";
  const denom=Math.max(focus?focusTotal:total,1);
+ const focusTitle=focus?(selectedStatTag!==null?`${focus} · ${tagLabel(selectedStatTag)}`:focus):"";
 
  if(period==="day"){
-  bl.textContent=focus?`Sessions · ${focus}`:"Sessions";
-  bd.innerHTML=renderDaySessions(ss,start,end,focus);
+  bl.textContent=focus?`Sessions · ${focusTitle}`:"Sessions";
+  bd.innerHTML=renderDaySessions(ss,start,end);
   return;
  }
  if(period==="year"){
-  bl.textContent=focus?`By month · ${focus}`:"By month";
+  bl.textContent=focus?`By month · ${focusTitle}`:"By month";
   const byMonth=aggregateByMonth(ssFocus,start,end);
   const rows=[];
   for(let m=0;m<12;m++){
@@ -478,7 +566,7 @@ function renderPeriod(){
    <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%;${fillColor?`background:${esc(fillColor)}`:""}"></div></div>`).join("");
   return;
  }
- bl.textContent=(period==="week"?"By day":"By day of month")+(focus?` · ${focus}`:"");
+ bl.textContent=(period==="week"?"By day":"By day of month")+(focus?` · ${focusTitle}`:"");
  const byDay=aggregateByDayKey(ssFocus,start,end);
  const rows=[];
  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
@@ -500,39 +588,52 @@ function renderPeriod(){
 function render(){
  renderCategories();
  const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,30);
- $("history").innerHTML=recent.map((x,i)=>`
-  <div class="item">
-   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+ $("history").innerHTML=recent.map((x,i)=>{
+  const tag=sessionTag(x);
+  const title=tag?`${x.category} · ${tag}`:x.category;
+  return `<div class="item">
+   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(title)}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
    <div class="item-actions">
     <b style="padding-top:9px">${short((x.end-x.start)/1000)}</b>
     <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Edit</button>
     <button class="danger deleteSession" data-i="${db.sessions.indexOf(x)}" type="button">Delete</button>
    </div>
-  </div>`).join("")||'<div class="empty">No sessions yet.</div>';
+  </div>`;
+ }).join("")||'<div class="empty">No sessions yet.</div>';
 
  if(db.active){
    const col=catColor(db.active.category);
-   $("statusText").textContent=db.active.category;
+   const tag=sessionTag(db.active);
+   $("statusText").textContent=tag?`${db.active.category} · ${tag}`:db.active.category;
    $("statusDot").hidden=false;$("statusDot").style.background=col;
    $("clock").style.color=col;
-   $("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category;
+   $("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category;$("category").disabled=true;
  }else{
    $("statusText").textContent="Idle";
    $("statusDot").hidden=true;$("clock").style.color="";
-   $("start").disabled=false;$("stop").disabled=true;
+   $("start").disabled=false;$("stop").disabled=true;$("category").disabled=false;
  }
+ updateTagRow();
+ if(db.active) $("sessionTag").disabled=true;
+ else $("sessionTag").disabled=false;
  renderPeriod();
 }
 
 function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
 
+$("category").addEventListener("change",updateTagRow);
 $("start").addEventListener("click",()=>{
  if(db.active)return;
- db.active={category:$("category").value,start:Date.now()};save();render();
+ const category=$("category").value;
+ const tag=isTagCategory(category)?$("sessionTag").value.trim():"";
+ db.active={category,start:Date.now(),...(tag?{tag}:{})};save();render();
 });
 $("stop").addEventListener("click",()=>{
  if(!db.active)return;
- db.sessions.push({category:db.active.category,start:db.active.start,end:Date.now()});
+ const row={category:db.active.category,start:db.active.start,end:Date.now()};
+ const tag=sessionTag(db.active);
+ if(tag) row.tag=tag;
+ db.sessions.push(row);
  db.active=null;save();render();tick();
 });
 function addCategory(){
@@ -570,6 +671,10 @@ document.addEventListener("click",e=>{
    if(selectedStatCat===old) selectedStatCat=n;
    save();render();return;
  }
+ const st=e.target.closest(".tag-pick");
+ if(st&&st.dataset.tag!=null){
+   setStatTag(st.dataset.tag);return;
+ }
  const sc=e.target.closest(".cat-pick");
  if(sc&&sc.dataset.cat!=null){
    setStatCat(sc.dataset.cat);return;
@@ -581,7 +686,7 @@ document.addEventListener("click",e=>{
      alert("Cannot delete a category that has sessions. Change or delete those sessions first.");return;
    }
    delete db.colors[cat];
-   if(selectedStatCat===cat) selectedStatCat=null;
+   if(selectedStatCat===cat){selectedStatCat=null;selectedStatTag=null}
    db.categories.splice(i,1);save();render();return;
  }
  const es=e.target.closest(".editSession");
@@ -589,6 +694,11 @@ document.addEventListener("click",e=>{
    const i=Number(es.dataset.i),x=db.sessions[i];if(!x)return;
    const cat=prompt("Category:",x.category);if(cat===null)return;
    const n=cat.trim();if(!n)return;
+   let tag=sessionTag(x);
+   if(isTagCategory(n)){
+     const t=prompt("Book title (optional):",tag);if(t===null)return;
+     tag=t.trim();
+   }else tag="";
    let dur=prompt("Duration in minutes:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
    const mins=Number(dur);
    if(!Number.isFinite(mins)||mins<=0){alert("Invalid duration.");return}
@@ -597,6 +707,7 @@ document.addEventListener("click",e=>{
      db.colors[n]=defaultColor(db.categories.length-1);
    }
    x.category=n;x.end=x.start+Math.round(mins*60000);
+   if(tag) x.tag=tag; else delete x.tag;
    save();render();return;
  }
  const ds=e.target.closest(".deleteSession");
