@@ -17,7 +17,10 @@ select,input{width:100%;background:#202028;color:var(--text);border:1px solid va
 button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44px;font-weight:650;cursor:pointer}
 .primary{background:var(--accent);color:#fff}.secondary{background:#25252e;color:#fff}.danger{background:#35171c;color:#ff929c}
 .row{display:flex;gap:10px}.row>*{min-width:0;flex:1}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:var(--card2);border-radius:15px;padding:14px}.num{font-size:23px;font-weight:700}.label{font-size:12px;color:var(--muted);margin-top:3px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stats.stats-3{grid-template-columns:1fr 1fr 1fr}.stats.stats-1{grid-template-columns:1fr}
+.stat{background:var(--card2);border-radius:15px;padding:14px}.num{font-size:23px;font-weight:700}.label{font-size:12px;color:var(--muted);margin-top:3px}
+.stat.jump{cursor:pointer;border:1px solid transparent;width:100%;color:inherit;font:inherit;text-align:left}.stat.jump:hover{border-color:var(--line)}.stat.jump.active{border-color:var(--accent)}
+.stat .num{font-variant-numeric:tabular-nums}
 .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.tabs button{flex:1;min-width:calc(25% - 6px);font-size:14px;padding:9px 6px}.tabs .active{background:var(--accent)}
 .period-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}.period-nav button{flex:0 0 auto;min-width:44px;padding:9px 12px}.period-nav .period-title{flex:1;text-align:center;font-size:14px;font-weight:650;line-height:1.25}
 .subsection{font-size:13px;font-weight:650;color:var(--muted);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.04em}
@@ -29,13 +32,16 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .donut-chart svg{display:block;width:100%;height:100%;transform:rotate(-90deg)}
 .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:18px}
 .donut-center .num{font-size:18px;font-weight:700;line-height:1.1}.donut-center .label{font-size:11px;color:var(--muted);margin-top:3px}
-.donut-legend{flex:1;min-width:140px;display:flex;flex-direction:column;gap:8px}
-.donut-legend .leg{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}
+.donut-legend{flex:1;min-width:140px;display:flex;flex-direction:column;gap:6px}
+.donut-legend .leg{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;width:100%;background:transparent;color:inherit;border-radius:10px;padding:8px;text-align:left;font-weight:500;min-height:0}
 .donut-legend .leg small{color:var(--muted);white-space:nowrap}
-.hbar-list{margin-top:4px}
-.hbar-row{display:grid;grid-template-columns:minmax(72px,28%) 1fr auto;align-items:center;gap:10px;margin:10px 0}
+.hbar-list{margin-top:4px;display:flex;flex-direction:column;gap:6px}
+.hbar-row{display:grid;grid-template-columns:minmax(72px,28%) 1fr auto;align-items:center;gap:10px;width:100%;background:transparent;color:inherit;border-radius:10px;padding:8px;text-align:left;font-weight:500;min-height:0}
 .hbar-row .cat-name{min-width:0}.hbar-row .hbar-val{font-size:13px;color:var(--muted);white-space:nowrap;text-align:right}
 .hbar-track{height:12px;background:#292932;border-radius:9px;overflow:hidden}.hbar-fill{height:100%;border-radius:9px;min-width:0}
+.cat-pick{cursor:pointer;transition:opacity .15s,background .15s}.cat-pick:hover{background:var(--card2)}
+.cat-pick.selected{background:var(--card2);box-shadow:inset 0 0 0 1px var(--line)}.cat-pick.dim{opacity:.38}
+.stat .num.cat-focus{color:inherit}
 .item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}
 .item small{color:var(--muted)}.item-actions{display:flex;gap:6px;flex-shrink:0}.item-actions button{min-height:36px;padding:6px 9px;font-size:13px}
 .empty{color:var(--muted);text-align:center;padding:12px}.note{font-size:12px;color:var(--muted);line-height:1.45}
@@ -75,9 +81,14 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   <div class="row" style="margin-bottom:12px">
     <button class="secondary" id="periodToday" type="button" style="flex:1">Go to today</button>
   </div>
-  <div class="stats">
+  <div id="periodStatsAll" class="stats">
     <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total</div></div>
-    <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Daily average</div></div>
+    <div class="stat" id="periodAvgStat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Daily average</div></div>
+  </div>
+  <div id="periodStatsFocus" class="stats stats-3" hidden>
+    <button class="stat jump" type="button" data-jump="day"><div class="num" id="focusDay">0m</div><div class="label">Day</div></button>
+    <button class="stat jump" type="button" data-jump="week"><div class="num" id="focusWeek">0m</div><div class="label">Week</div></button>
+    <button class="stat jump" type="button" data-jump="month"><div class="num" id="focusMonth">0m</div><div class="label">Month</div></button>
   </div>
   <div class="subsection">Share</div>
   <div id="periodDonut"></div>
@@ -149,6 +160,28 @@ const short=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m
 const locDate={weekday:"short",day:"numeric",month:"short"};
 const locMonth={month:"long",year:"numeric"};
 let periodAnchor=new Date();
+let selectedStatCat=null;
+
+function setStatCat(cat){
+ if(selectedStatCat===cat) selectedStatCat=null;
+ else selectedStatCat=cat;
+ renderPeriod();
+}
+
+function setPeriodTab(period){
+ document.querySelectorAll(".tabs button").forEach(x=>{
+  x.classList.toggle("active",x.dataset.period===period);
+ });
+ renderPeriod();
+}
+
+function categorySeconds(cat,period,anchor){
+ const {start,end}=periodBounds(period,anchor);
+ const ss=sessionsInPeriod(period,anchor).filter(x=>x.category===cat);
+ let total=0;
+ ss.forEach(x=>{total+=clipSessionSeconds(x,start,end)});
+ return total;
+}
 
 const startOfDay=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x};
 const endOfDay=d=>{const x=new Date(d);x.setHours(23,59,59,999);return x};
@@ -275,28 +308,36 @@ function renderDonut(entries,total){
  const r=54,cx=70,cy=70,stroke=18;
  const circ=2*Math.PI*r;
  let offset=0;
+ const focus=selectedStatCat&&entries.some(([c])=>c===selectedStatCat)?selectedStatCat:null;
+ const focusTotal=focus?(entries.find(([c])=>c===focus)?.[1]||0):total;
  const arcs=entries.map(([c,t])=>{
   const frac=t/total;
   const len=frac*circ;
   const gap=entries.length>1?1.2:0;
   const dash=Math.max(0,len-gap);
   const col=catColor(c);
-  const html=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${esc(col)}" stroke-width="${stroke}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" stroke-linecap="butt"/>`;
+  const dim=focus&&c!==focus?` opacity="0.28"`:"";
+  const html=`<circle class="cat-pick" data-cat="${esc(c)}" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${esc(col)}" stroke-width="${stroke}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" stroke-linecap="butt"${dim} style="cursor:pointer"/>`;
   offset+=len;
   return html;
  }).join("");
  const legend=entries.map(([c,t])=>{
   const pct=Math.round(t/total*100);
-  return `<div class="leg"><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span><small>${short(t)} · ${pct}%</small></div>`;
+  const cls=["leg","cat-pick"];
+  if(focus===c) cls.push("selected");
+  else if(focus) cls.push("dim");
+  return `<button type="button" class="${cls.join(" ")}" data-cat="${esc(c)}"><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span><small>${short(t)} · ${pct}%</small></button>`;
  }).join("");
+ const centerLabel=focus?focus:"total";
+ const centerColor=focus?catColor(focus):"";
  el.innerHTML=`
   <div class="donut-wrap">
-   <div class="donut-chart" role="img" aria-label="Category share for period">
+   <div class="donut-chart" role="img" aria-label="Category share for period. Tap a category to focus totals.">
     <svg viewBox="0 0 140 140" aria-hidden="true">
      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#292932" stroke-width="${stroke}"/>
      ${arcs}
     </svg>
-    <div class="donut-center"><div class="num">${esc(short(total))}</div><div class="label">total</div></div>
+    <div class="donut-center"><div class="num" style="${centerColor?`color:${esc(centerColor)}`:""}">${esc(short(focusTotal))}</div><div class="label">${esc(centerLabel)}</div></div>
    </div>
    <div class="donut-legend">${legend}</div>
   </div>`;
@@ -309,14 +350,18 @@ function renderCategoryBars(entries,total){
   return;
  }
  const max=Math.max(...entries.map(e=>e[1]),1);
+ const focus=selectedStatCat&&entries.some(([c])=>c===selectedStatCat)?selectedStatCat:null;
  el.innerHTML=`<div class="hbar-list">${entries.map(([c,t])=>{
   const pct=Math.round(t/Math.max(total,1)*100);
   const w=Math.max(2,(t/max)*100);
-  return `<div class="hbar-row">
+  const cls=["hbar-row","cat-pick"];
+  if(focus===c) cls.push("selected");
+  else if(focus) cls.push("dim");
+  return `<button type="button" class="${cls.join(" ")}" data-cat="${esc(c)}">
    <span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span>
    <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:${esc(catColor(c))}"></div></div>
    <span class="hbar-val">${short(t)} · ${pct}%</span>
-  </div>`;
+  </button>`;
  }).join("")}</div>`;
 }
 
@@ -333,29 +378,90 @@ function renderCategories(){
   </div>`).join("");
 }
 
+function renderFocusStats(focus){
+ const all=$("periodStatsAll"),box=$("periodStatsFocus");
+ if(!focus){
+  all.hidden=false;box.hidden=true;return;
+ }
+ all.hidden=true;box.hidden=false;
+ const col=catColor(focus);
+ const dayT=categorySeconds(focus,"day",periodAnchor);
+ const weekT=categorySeconds(focus,"week",periodAnchor);
+ const monthT=categorySeconds(focus,"month",periodAnchor);
+ $("focusDay").textContent=short(dayT);
+ $("focusWeek").textContent=short(weekT);
+ $("focusMonth").textContent=short(monthT);
+ $("focusDay").style.color=col;
+ $("focusWeek").style.color=col;
+ $("focusMonth").style.color=col;
+ const period=currentPeriod();
+ document.querySelectorAll("#periodStatsFocus .stat.jump").forEach(b=>{
+  b.classList.toggle("active",b.dataset.jump===period);
+ });
+}
+
+function renderDaySessions(sessions,rangeStart,rangeEnd,focus){
+ const list=sessions
+  .map(x=>{
+   const t=clipSessionSeconds(x,rangeStart,rangeEnd);
+   if(t<=0)return null;
+   if(focus&&x.category!==focus)return null;
+   return {x,t};
+  })
+  .filter(Boolean)
+  .sort((a,b)=>a.x.start-b.x.start);
+ if(!list.length) return '<div class="empty">No sessions in this day.</div>';
+ return list.map(({x,t})=>`
+  <div class="day-row">
+   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(x.category)}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+   <span>${short(t)}</span>
+  </div>`).join("");
+}
+
 function renderPeriod(){
  const period=currentPeriod();
  const {start,end,spanDays}=periodBounds(period,periodAnchor);
  $("periodTitle").textContent=periodTitle(period,periodAnchor);
  const ss=sessionsInPeriod(period,periodAnchor);
  const {map,total}=aggregateByCategory(ss,start,end);
+ if(selectedStatCat&&!db.categories.includes(selectedStatCat)) selectedStatCat=null;
  const elapsedDays=period==="day"?1:Math.min(spanDays,Math.max(1,Math.ceil((Math.min(Date.now(),end.getTime())-start.getTime())/86400000)));
- $("periodTotal").textContent=short(total);
- $("periodLabel").textContent="Total for period";
- $("periodAvg").textContent=short(total/elapsedDays);
- $("periodAvgLabel").textContent=period==="day"?"Total for day":"Daily average";
+ const focus=selectedStatCat;
+ const focusTotal=focus?(map[focus]||0):total;
+
+ if(!focus){
+  $("periodTotal").textContent=short(total);
+  $("periodTotal").style.color="";
+  $("periodAvg").style.color="";
+  $("periodLabel").textContent=period==="day"?"Total for day":"Total for period";
+  $("periodAvg").textContent=short(total/elapsedDays);
+  $("periodAvgLabel").textContent="Daily average";
+  $("periodAvgStat").hidden=period==="day";
+  $("periodStatsAll").classList.toggle("stats-1",period==="day");
+ }else{
+  $("periodAvgStat").hidden=false;
+  $("periodStatsAll").classList.remove("stats-1");
+ }
+ renderFocusStats(focus);
+
  const entries=sortedCategoryEntries(map);
  renderDonut(entries,total);
  renderCategoryBars(entries,total);
 
+ const ssFocus=focus?ss.filter(x=>x.category===focus):ss;
  const bl=$("periodBreakdownLabel"),bd=$("periodBreakdown");
- if(period==="day"){
-  bl.hidden=true;bd.hidden=true;return;
- }
  bl.hidden=false;bd.hidden=false;
+ const fillColor=focus?catColor(focus):"";
+ const denom=Math.max(focus?focusTotal:total,1);
+
+ if(period==="day"){
+  bl.textContent=focus?`Sessions · ${focus}`:"Sessions";
+  bd.innerHTML=renderDaySessions(ss,start,end,focus);
+  return;
+ }
  if(period==="year"){
-  bl.textContent="By month";
-  const byMonth=aggregateByMonth(ss,start,end);
+  bl.textContent=focus?`By month · ${focus}`:"By month";
+  const byMonth=aggregateByMonth(ssFocus,start,end);
   const rows=[];
   for(let m=0;m<12;m++){
    const key=`${start.getFullYear()}-${String(m+1).padStart(2,"0")}`;
@@ -367,13 +473,13 @@ function renderPeriod(){
   bd.innerHTML=rows.map(r=>`
    <div class="day-row">
     <span>${esc(r.label)}</span>
-    <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/Math.max(total,1)*100)}%</small>`:""}</span>
+    <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/denom*100)}%</small>`:""}</span>
    </div>
-   <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("");
+   <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%;${fillColor?`background:${esc(fillColor)}`:""}"></div></div>`).join("");
   return;
  }
- bl.textContent=period==="week"?"By day":"By day of month";
- const byDay=aggregateByDayKey(ss,start,end);
+ bl.textContent=(period==="week"?"By day":"By day of month")+(focus?` · ${focus}`:"");
+ const byDay=aggregateByDayKey(ssFocus,start,end);
  const rows=[];
  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
   const dk=dayKey(d);
@@ -386,9 +492,9 @@ function renderPeriod(){
  bd.innerHTML=rows.map(r=>`
   <div class="day-row">
    <div><span>${esc(r.label)}</span>${r.sub?` <small>${esc(r.sub)}</small>`:""}</div>
-   <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/Math.max(total,1)*100)}%</small>`:""}</span>
+   <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/denom*100)}%</small>`:""}</span>
   </div>
-  <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("")||'<div class="empty">No data.</div>';
+  <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%;${fillColor?`background:${esc(fillColor)}`:""}"></div></div>`).join("")||'<div class="empty">No data.</div>';
 }
 
 function render(){
@@ -461,7 +567,12 @@ document.addEventListener("click",e=>{
    delete db.colors[old];
    db.sessions.forEach(x=>{if(x.category===old)x.category=n});
    if(db.active?.category===old)db.active.category=n;
+   if(selectedStatCat===old) selectedStatCat=n;
    save();render();return;
+ }
+ const sc=e.target.closest(".cat-pick");
+ if(sc&&sc.dataset.cat!=null){
+   setStatCat(sc.dataset.cat);return;
  }
  const d=e.target.closest(".deleteCat");
  if(d){
@@ -470,6 +581,7 @@ document.addEventListener("click",e=>{
      alert("Cannot delete a category that has sessions. Change or delete those sessions first.");return;
    }
    delete db.colors[cat];
+   if(selectedStatCat===cat) selectedStatCat=null;
    db.categories.splice(i,1);save();render();return;
  }
  const es=e.target.closest(".editSession");
@@ -495,12 +607,14 @@ document.addEventListener("click",e=>{
 });
 
 document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{
- document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
- b.classList.add("active");renderPeriod();
+ setPeriodTab(b.dataset.period);
 }));
 $("periodPrev").addEventListener("click",()=>{shiftAnchor(currentPeriod(),-1);renderPeriod()});
 $("periodNext").addEventListener("click",()=>{shiftAnchor(currentPeriod(),1);renderPeriod()});
 $("periodToday").addEventListener("click",()=>{periodAnchor=new Date();renderPeriod()});
+document.querySelectorAll("#periodStatsFocus .stat.jump").forEach(b=>b.addEventListener("click",()=>{
+ setPeriodTab(b.dataset.jump);
+}));
 
 $("export").addEventListener("click",()=>{
  const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
