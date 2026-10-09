@@ -1,0 +1,16 @@
+services:
+  tracker:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      DATA_DIR: /data
+    volumes:
+      - tracker_data:/data
+    restart: unless-stopped
+
+volumes:
+  tracker_data:
