@@ -24,6 +24,18 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .day-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.day-row:last-child{border-bottom:0}
 .day-row small{color:var(--muted);font-size:12px}.day-scroll{max-height:220px;overflow-y:auto;margin:0 -4px;padding:0 4px}
 .bar{height:9px;background:#292932;border-radius:9px;overflow:hidden;margin-top:8px}.fill{height:100%;background:var(--accent);border-radius:9px}
+.donut-wrap{display:flex;align-items:center;gap:18px;margin:4px 0 4px;flex-wrap:wrap}
+.donut-chart{position:relative;width:148px;height:148px;flex:0 0 auto;margin:0 auto}
+.donut-chart svg{display:block;width:100%;height:100%;transform:rotate(-90deg)}
+.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:18px}
+.donut-center .num{font-size:18px;font-weight:700;line-height:1.1}.donut-center .label{font-size:11px;color:var(--muted);margin-top:3px}
+.donut-legend{flex:1;min-width:140px;display:flex;flex-direction:column;gap:8px}
+.donut-legend .leg{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}
+.donut-legend .leg small{color:var(--muted);white-space:nowrap}
+.hbar-list{margin-top:4px}
+.hbar-row{display:grid;grid-template-columns:minmax(72px,28%) 1fr auto;align-items:center;gap:10px;margin:10px 0}
+.hbar-row .cat-name{min-width:0}.hbar-row .hbar-val{font-size:13px;color:var(--muted);white-space:nowrap;text-align:right}
+.hbar-track{height:12px;background:#292932;border-radius:9px;overflow:hidden}.hbar-fill{height:100%;border-radius:9px;min-width:0}
 .item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}
 .item small{color:var(--muted)}.item-actions{display:flex;gap:6px;flex-shrink:0}.item-actions button{min-height:36px;padding:6px 9px;font-size:13px}
 .empty{color:var(--muted);text-align:center;padding:12px}.note{font-size:12px;color:var(--muted);line-height:1.45}
@@ -67,6 +79,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total</div></div>
     <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Daily average</div></div>
   </div>
+  <div class="subsection">Share</div>
+  <div id="periodDonut"></div>
   <div class="subsection">By category</div>
   <div id="periodCats"></div>
   <div class="subsection" id="periodBreakdownLabel" hidden>Breakdown</div>
@@ -248,6 +262,64 @@ function shiftAnchor(period,dir){
  periodAnchor=a;
 }
 
+function sortedCategoryEntries(map){
+ return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+}
+
+function renderDonut(entries,total){
+ const el=$("periodDonut");
+ if(!entries.length||total<=0){
+  el.innerHTML='<div class="empty">No time logged in this period.</div>';
+  return;
+ }
+ const r=54,cx=70,cy=70,stroke=18;
+ const circ=2*Math.PI*r;
+ let offset=0;
+ const arcs=entries.map(([c,t])=>{
+  const frac=t/total;
+  const len=frac*circ;
+  const gap=entries.length>1?1.2:0;
+  const dash=Math.max(0,len-gap);
+  const col=catColor(c);
+  const html=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${esc(col)}" stroke-width="${stroke}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" stroke-linecap="butt"/>`;
+  offset+=len;
+  return html;
+ }).join("");
+ const legend=entries.map(([c,t])=>{
+  const pct=Math.round(t/total*100);
+  return `<div class="leg"><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span><small>${short(t)} · ${pct}%</small></div>`;
+ }).join("");
+ el.innerHTML=`
+  <div class="donut-wrap">
+   <div class="donut-chart" role="img" aria-label="Category share for period">
+    <svg viewBox="0 0 140 140" aria-hidden="true">
+     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#292932" stroke-width="${stroke}"/>
+     ${arcs}
+    </svg>
+    <div class="donut-center"><div class="num">${esc(short(total))}</div><div class="label">total</div></div>
+   </div>
+   <div class="donut-legend">${legend}</div>
+  </div>`;
+}
+
+function renderCategoryBars(entries,total){
+ const el=$("periodCats");
+ if(!entries.length||total<=0){
+  el.innerHTML='<div class="empty">No time logged in this period.</div>';
+  return;
+ }
+ const max=Math.max(...entries.map(e=>e[1]),1);
+ el.innerHTML=`<div class="hbar-list">${entries.map(([c,t])=>{
+  const pct=Math.round(t/Math.max(total,1)*100);
+  const w=Math.max(2,(t/max)*100);
+  return `<div class="hbar-row">
+   <span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span>
+   <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:${esc(catColor(c))}"></div></div>
+   <span class="hbar-val">${short(t)} · ${pct}%</span>
+  </div>`;
+ }).join("")}</div>`;
+}
+
 function renderCategories(){
  $("category").innerHTML=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
  $("catList").innerHTML=db.categories.map((c,i)=>`
@@ -272,12 +344,9 @@ function renderPeriod(){
  $("periodLabel").textContent="Total for period";
  $("periodAvg").textContent=short(total/elapsedDays);
  $("periodAvgLabel").textContent=period==="day"?"Total for day":"Daily average";
- const max=Math.max(...Object.values(map),1);
- $("periodCats").innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([c,t])=>`
-  <div style="margin:11px 0">
-   <div class="row"><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span><span>${short(t)} · ${Math.round(t/Math.max(total,1)*100)}%</span></div>
-   <div class="bar"><div class="fill" style="width:${t/max*100}%;background:${esc(catColor(c))}"></div></div>
-  </div>`).join("")||'<div class="empty">No time logged in this period.</div>';
+ const entries=sortedCategoryEntries(map);
+ renderDonut(entries,total);
+ renderCategoryBars(entries,total);
 
  const bl=$("periodBreakdownLabel"),bd=$("periodBreakdown");
  if(period==="day"){
