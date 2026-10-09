@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0b0f">
-<title>Tiempo Privado</title>
+<title>Private Time</title>
 <style>
 :root{--bg:#0b0b0f;--card:#15151b;--card2:#1d1d25;--text:#f5f5f7;--muted:#9999a5;--line:#2b2b35;--accent:#7c5cff;--danger:#ff5969}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif}
@@ -35,76 +35,78 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 </head>
 <body>
 <main>
-<h1>Tiempo</h1>
+<h1>Time</h1>
 
 <div class="card timer">
-  <div class="sub" id="status"><span id="statusDot" hidden></span><span id="statusText">Sin actividad</span></div>
+  <div class="sub" id="status"><span id="statusDot" hidden></span><span id="statusText">Idle</span></div>
   <div class="time" id="clock">00:00:00</div>
   <select id="category"></select>
   <div class="row" style="margin-top:12px">
-    <button class="primary" id="start" type="button">Iniciar</button>
-    <button class="secondary" id="stop" type="button" disabled>Terminar</button>
+    <button class="primary" id="start" type="button">Start</button>
+    <button class="secondary" id="stop" type="button" disabled>Stop</button>
   </div>
 </div>
 
 <div class="card">
-  <div class="section">Estadísticas</div>
+  <div class="section">Statistics</div>
   <div class="tabs">
-    <button class="secondary active" data-period="day" type="button">Día</button>
-    <button class="secondary" data-period="week" type="button">Semana</button>
-    <button class="secondary" data-period="month" type="button">Mes</button>
-    <button class="secondary" data-period="year" type="button">Año</button>
+    <button class="secondary active" data-period="day" type="button">Day</button>
+    <button class="secondary" data-period="week" type="button">Week</button>
+    <button class="secondary" data-period="month" type="button">Month</button>
+    <button class="secondary" data-period="year" type="button">Year</button>
   </div>
   <div class="period-nav">
-    <button class="secondary" id="periodPrev" type="button" aria-label="Anterior">‹</button>
+    <button class="secondary" id="periodPrev" type="button" aria-label="Previous">‹</button>
     <div class="period-title" id="periodTitle">—</div>
-    <button class="secondary" id="periodNext" type="button" aria-label="Siguiente">›</button>
+    <button class="secondary" id="periodNext" type="button" aria-label="Next">›</button>
   </div>
   <div class="row" style="margin-bottom:12px">
-    <button class="secondary" id="periodToday" type="button" style="flex:1">Ir a hoy</button>
+    <button class="secondary" id="periodToday" type="button" style="flex:1">Go to today</button>
   </div>
   <div class="stats">
     <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total</div></div>
-    <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Media diaria</div></div>
+    <div class="stat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Daily average</div></div>
   </div>
-  <div class="subsection">Por categoría</div>
+  <div class="subsection">By category</div>
   <div id="periodCats"></div>
-  <div class="subsection" id="periodBreakdownLabel" hidden>Desglose</div>
+  <div class="subsection" id="periodBreakdownLabel" hidden>Breakdown</div>
   <div class="day-scroll" id="periodBreakdown" hidden></div>
 </div>
 
 <div class="card">
-  <div class="section">Historial</div>
+  <div class="section">History</div>
   <div id="history"></div>
 </div>
 
 <div class="card">
-  <div class="section">Categorías</div>
+  <div class="section">Categories</div>
   <div class="row">
-    <input id="newCat" placeholder="Nueva categoría" maxlength="40">
-    <button class="secondary" id="addCat" type="button">Añadir</button>
+    <input id="newCat" placeholder="New category" maxlength="40">
+    <button class="secondary" id="addCat" type="button">Add</button>
   </div>
   <div id="catList" style="margin-top:8px"></div>
 </div>
 
 <div class="card">
-  <div class="section">Datos</div>
+  <div class="section">Data</div>
   <div class="row">
-    <button class="secondary" id="export" type="button">Exportar</button>
-    <button class="secondary" id="importBtn" type="button">Importar</button>
+    <button class="secondary" id="export" type="button">Export</button>
+    <button class="secondary" id="importBtn" type="button">Import</button>
     <input type="file" id="file" accept=".json" hidden>
   </div>
-  <button class="danger" id="wipe" style="width:100%;margin-top:10px" type="button">Borrar todos los datos</button>
-  <p class="note" style="margin-bottom:0">Los registros se guardan únicamente en el almacenamiento local de este navegador. Esta aplicación no necesita una cuenta ni envía el historial a un servidor.</p>
+  <button class="danger" id="wipe" style="width:100%;margin-top:10px" type="button">Delete all data</button>
+  <p class="note" style="margin-bottom:0">Records are stored only in this browser&apos;s local storage. No account is required and history is never sent to a server.</p>
 </div>
 </main>
 
 <script>
 (function(){
 "use strict";
+// Keep legacy key so existing localStorage data still loads.
 const KEY="tiempo_privado_v2";
-const DEFAULT=["Trabajo","Estudio","Ocio","Deporte","Personal"];
+const DEFAULT=["Work","Study","Leisure","Sport","Personal"];
 const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
+const LOCALE="en-US";
 let db;
 try{db=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){db=null}
 if(!db||!Array.isArray(db.categories)||!Array.isArray(db.sessions)){
@@ -162,16 +164,16 @@ function periodBounds(period,anchor){
 function periodTitle(period,anchor){
  const a=new Date(anchor);
  if(period==="day"){
-  const t=a.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-  return isSameDay(a,Date.now())?`Hoy · ${t}`:t;
+  const t=a.toLocaleDateString(LOCALE,{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  return isSameDay(a,Date.now())?`Today · ${t}`:t;
  }
  if(period==="week"){
   const {start,end}=periodBounds("week",a);
-  const s=start.toLocaleDateString("es-ES",{day:"numeric",month:"short"});
-  const e=end.toLocaleDateString("es-ES",{day:"numeric",month:"short",year:"numeric"});
+  const s=start.toLocaleDateString(LOCALE,{day:"numeric",month:"short"});
+  const e=end.toLocaleDateString(LOCALE,{day:"numeric",month:"short",year:"numeric"});
   return `${s} – ${e}`;
  }
- if(period==="month") return a.toLocaleDateString("es-ES",locMonth);
+ if(period==="month") return a.toLocaleDateString(LOCALE,locMonth);
  return String(a.getFullYear());
 }
 
@@ -220,9 +222,7 @@ function aggregateByDayKey(sessions,rangeStart,rangeEnd){
 function aggregateByMonth(sessions,rangeStart,rangeEnd){
  const by={};
  sessions.forEach(x=>{
-  const t=clipSessionSeconds(x,rangeStart,rangeEnd);
-  if(t<=0)return;
-  const startM=new Date(rangeStart.getFullYear(),rangeStart.getMonth(),1);
+  if(clipSessionSeconds(x,rangeStart,rangeEnd)<=0)return;
   for(let m=0;m<12;m++){
    const ms=startOfMonth(new Date(rangeStart.getFullYear(),m,1));
    const me=endOfMonth(ms);
@@ -253,9 +253,9 @@ function renderCategories(){
   <div class="item">
    <span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span>
    <div class="item-actions">
-    <input type="color" class="cat-color pickColor" data-i="${i}" value="${esc(catColor(c))}" title="Color" aria-label="Color de ${esc(c)}">
-    <button class="secondary renameCat" data-i="${i}" type="button">Editar</button>
-    ${db.categories.length>1?`<button class="danger deleteCat" data-i="${i}" type="button">Borrar</button>`:""}
+    <input type="color" class="cat-color pickColor" data-i="${i}" value="${esc(catColor(c))}" title="Color" aria-label="Color for ${esc(c)}">
+    <button class="secondary renameCat" data-i="${i}" type="button">Edit</button>
+    ${db.categories.length>1?`<button class="danger deleteCat" data-i="${i}" type="button">Delete</button>`:""}
    </div>
   </div>`).join("");
 }
@@ -268,15 +268,15 @@ function renderPeriod(){
  const {map,total}=aggregateByCategory(ss,start,end);
  const elapsedDays=period==="day"?1:Math.min(spanDays,Math.max(1,Math.ceil((Math.min(Date.now(),end.getTime())-start.getTime())/86400000)));
  $("periodTotal").textContent=short(total);
- $("periodLabel").textContent="Total en el período";
+ $("periodLabel").textContent="Total for period";
  $("periodAvg").textContent=short(total/elapsedDays);
- $("periodAvgLabel").textContent=period==="day"?"Total del día":"Media diaria";
+ $("periodAvgLabel").textContent=period==="day"?"Total for day":"Daily average";
  const max=Math.max(...Object.values(map),1);
  $("periodCats").innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([c,t])=>`
   <div style="margin:11px 0">
    <div class="row"><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span><span>${short(t)} · ${Math.round(t/Math.max(total,1)*100)}%</span></div>
    <div class="bar"><div class="fill" style="width:${t/max*100}%;background:${esc(catColor(c))}"></div></div>
-  </div>`).join("")||'<div class="empty">No hay tiempo registrado en este período.</div>';
+  </div>`).join("")||'<div class="empty">No time logged in this period.</div>';
 
  const bl=$("periodBreakdownLabel"),bd=$("periodBreakdown");
  if(period==="day"){
@@ -284,14 +284,14 @@ function renderPeriod(){
  }
  bl.hidden=false;bd.hidden=false;
  if(period==="year"){
-  bl.textContent="Por mes";
+  bl.textContent="By month";
   const byMonth=aggregateByMonth(ss,start,end);
-  const monthNames=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const rows=[];
   for(let m=0;m<12;m++){
    const key=`${start.getFullYear()}-${String(m+1).padStart(2,"0")}`;
    const t=byMonth[key]||0;
-   rows.push({label:monthNames[m],sub:"",t});
+   const label=new Date(start.getFullYear(),m,1).toLocaleDateString(LOCALE,{month:"short"});
+   rows.push({label,sub:"",t});
   }
   const maxB=Math.max(...rows.map(r=>r.t),1);
   bd.innerHTML=rows.map(r=>`
@@ -302,14 +302,14 @@ function renderPeriod(){
    <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("");
   return;
  }
- bl.textContent=period==="week"?"Por día":"Por día del mes";
+ bl.textContent=period==="week"?"By day":"By day of month";
  const byDay=aggregateByDayKey(ss,start,end);
  const rows=[];
  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
   const dk=dayKey(d);
   const t=byDay[dk]||0;
-  const label=d.toLocaleDateString("es-ES",locDate);
-  const sub=isSameDay(d,Date.now())?"hoy":"";
+  const label=d.toLocaleDateString(LOCALE,locDate);
+  const sub=isSameDay(d,Date.now())?"today":"";
   rows.push({label,sub,t});
  }
  const maxB=Math.max(...rows.map(r=>r.t),1);
@@ -318,24 +318,21 @@ function renderPeriod(){
    <div><span>${esc(r.label)}</span>${r.sub?` <small>${esc(r.sub)}</small>`:""}</div>
    <span>${short(r.t)}${r.t?` <small>· ${Math.round(r.t/Math.max(total,1)*100)}%</small>`:""}</span>
   </div>
-  <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("")||'<div class="empty">Sin datos.</div>';
+  <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%"></div></div>`).join("")||'<div class="empty">No data.</div>';
 }
 
 function render(){
  renderCategories();
- const today=dayKey(Date.now());
- const ss=db.sessions.filter(x=>dayKey(x.start)===today);
- const total=ss.reduce((a,x)=>a+(x.end-x.start)/1000,0);
  const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,30);
  $("history").innerHTML=recent.map((x,i)=>`
   <div class="item">
-   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString()} · ${new Date(x.end).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</small></div>
+   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(x.category)}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
    <div class="item-actions">
     <b style="padding-top:9px">${short((x.end-x.start)/1000)}</b>
-    <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Editar</button>
-    <button class="danger deleteSession" data-i="${db.sessions.indexOf(x)}" type="button">Borrar</button>
+    <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Edit</button>
+    <button class="danger deleteSession" data-i="${db.sessions.indexOf(x)}" type="button">Delete</button>
    </div>
-  </div>`).join("")||'<div class="empty">Sin sesiones todavía.</div>';
+  </div>`).join("")||'<div class="empty">No sessions yet.</div>';
 
  if(db.active){
    const col=catColor(db.active.category);
@@ -344,7 +341,7 @@ function render(){
    $("clock").style.color=col;
    $("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category;
  }else{
-   $("statusText").textContent="Sin actividad";
+   $("statusText").textContent="Idle";
    $("statusDot").hidden=true;$("clock").style.color="";
    $("start").disabled=false;$("stop").disabled=true;
  }
@@ -365,7 +362,7 @@ $("stop").addEventListener("click",()=>{
 $("addCat").addEventListener("click",()=>{
  const c=$("newCat").value.trim();
  if(!c)return;
- if(db.categories.includes(c)){alert("Esa categoría ya existe.");return}
+ if(db.categories.includes(c)){alert("That category already exists.");return}
  db.categories.push(c);
  db.colors[c]=defaultColor(db.categories.length-1);
  $("newCat").value="";save();render();
@@ -383,11 +380,11 @@ document.addEventListener("input",e=>{
 document.addEventListener("click",e=>{
  const b=e.target.closest(".renameCat");
  if(b){
-   const i=Number(b.dataset.i),old=db.categories[i],name=prompt("Nombre de la categoría:",old);
+   const i=Number(b.dataset.i),old=db.categories[i],name=prompt("Category name:",old);
    if(name===null)return;
    const n=name.trim();
    if(!n||n===old)return;
-   if(db.categories.includes(n)){alert("Esa categoría ya existe.");return}
+   if(db.categories.includes(n)){alert("That category already exists.");return}
    db.categories[i]=n;
    db.colors[n]=db.colors[old]||defaultColor(i);
    delete db.colors[old];
@@ -399,7 +396,7 @@ document.addEventListener("click",e=>{
  if(d){
    const i=Number(d.dataset.i),cat=db.categories[i];
    if(db.sessions.some(x=>x.category===cat)||db.active?.category===cat){
-     alert("No puedes borrar una categoría que tiene sesiones. Primero cambia o borra esas sesiones.");return;
+     alert("Cannot delete a category that has sessions. Change or delete those sessions first.");return;
    }
    delete db.colors[cat];
    db.categories.splice(i,1);save();render();return;
@@ -407,11 +404,11 @@ document.addEventListener("click",e=>{
  const es=e.target.closest(".editSession");
  if(es){
    const i=Number(es.dataset.i),x=db.sessions[i];if(!x)return;
-   const cat=prompt("Categoría:",x.category);if(cat===null)return;
+   const cat=prompt("Category:",x.category);if(cat===null)return;
    const n=cat.trim();if(!n)return;
-   let dur=prompt("Duración en minutos:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
+   let dur=prompt("Duration in minutes:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
    const mins=Number(dur);
-   if(!Number.isFinite(mins)||mins<=0){alert("Duración no válida.");return}
+   if(!Number.isFinite(mins)||mins<=0){alert("Invalid duration.");return}
    if(!db.categories.includes(n)){
      db.categories.push(n);
      db.colors[n]=defaultColor(db.categories.length-1);
@@ -422,7 +419,7 @@ document.addEventListener("click",e=>{
  const ds=e.target.closest(".deleteSession");
  if(ds){
    const i=Number(ds.dataset.i);if(!db.sessions[i])return;
-   if(confirm("¿Borrar esta sesión?")){db.sessions.splice(i,1);save();render();}
+   if(confirm("Delete this session?")){db.sessions.splice(i,1);save();render();}
  }
 });
 
@@ -436,7 +433,7 @@ $("periodToday").addEventListener("click",()=>{periodAnchor=new Date();renderPer
 
 $("export").addEventListener("click",()=>{
  const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
- const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tiempo-backup.json";a.click();
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="time-backup.json";a.click();
  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 });
 $("importBtn").addEventListener("click",()=>$("file").click());
@@ -447,14 +444,14 @@ $("file").addEventListener("change",e=>{
    try{
     const x=JSON.parse(r.result);
     if(!Array.isArray(x.categories)||!Array.isArray(x.sessions))throw new Error();
-    db={categories:x.categories,sessions:x.sessions,active:x.active||null,colors:x.colors&&typeof x.colors==="object"?x.colors:{}};ensureColors();save();render();alert("Datos importados.");
-   }catch(err){alert("Archivo no válido.");}
+    db={categories:x.categories,sessions:x.sessions,active:x.active||null,colors:x.colors&&typeof x.colors==="object"?x.colors:{}};ensureColors();save();render();alert("Data imported.");
+   }catch(err){alert("Invalid file.");}
    e.target.value="";
  };
  r.readAsText(f);
 });
 $("wipe").addEventListener("click",()=>{
- if(confirm("¿Borrar todas las sesiones y categorías?")){
+ if(confirm("Delete all sessions and categories?")){
    db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};ensureColors();save();render();tick();
  }
 });
