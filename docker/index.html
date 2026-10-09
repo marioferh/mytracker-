@@ -55,8 +55,11 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 #loginError{color:var(--danger);font-size:13px;margin-top:10px;min-height:1.2em}
 #app{display:none}#app.ready{display:block}
 .save-status{font-size:12px;color:var(--muted);margin-top:8px}
-#tagRow{margin-top:10px}#tagRow[hidden]{display:none!important}
-.tag-chip{display:inline-block;font-size:12px;color:var(--muted);font-weight:500}
+#subRow,#tagRow{margin-top:10px}#subRow[hidden],#tagRow[hidden]{display:none!important}
+.subcat-panel{margin:4px 0 14px;padding:10px 12px;background:var(--card2);border-radius:12px}
+.subcat-panel .subsection{margin:0 0 8px}
+.sub-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;font-size:14px}
+.sub-item button{min-height:32px;padding:4px 8px;font-size:12px}
 </style>
 </head>
 <body>
@@ -76,8 +79,11 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   <div class="sub" id="status"><span id="statusDot" hidden></span><span id="statusText">Idle</span></div>
   <div class="time" id="clock">00:00:00</div>
   <select id="category"></select>
+  <div id="subRow" hidden>
+    <select id="subcategory"></select>
+  </div>
   <div id="tagRow" hidden>
-    <input id="sessionTag" list="tagList" placeholder="Book title" maxlength="80" autocomplete="off">
+    <input id="sessionTag" list="tagList" placeholder="Title / name (optional)" maxlength="80" autocomplete="off">
     <datalist id="tagList"></datalist>
   </div>
   <div class="row" style="margin-top:12px">
@@ -115,7 +121,9 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   <div id="periodDonut"></div>
   <div class="subsection">By category</div>
   <div id="periodCats"></div>
-  <div class="subsection" id="periodTagsLabel" hidden>By book</div>
+  <div class="subsection" id="periodSubsLabel" hidden>By subcategory</div>
+  <div id="periodSubs" hidden></div>
+  <div class="subsection" id="periodTagsLabel" hidden>By title</div>
   <div id="periodTags" hidden></div>
   <div class="subsection" id="periodBreakdownLabel" hidden>Breakdown</div>
   <div class="day-scroll" id="periodBreakdown" hidden></div>
@@ -151,12 +159,13 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 <script>
 (function(){
 "use strict";
-const DEFAULT=["work","read","sport","play","free"];
-const TAG_CATEGORY="read";
-const UNTAGGED="(no book)";
+const DEFAULT=["work","read","TV","sport","play","free"];
+const DEFAULT_SUBS={read:["book","comic"],TV:["movie","series"]};
+const NOSUB="(no subcategory)";
+const NOTITLE="(no title)";
 const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
 const LOCALE="en-US";
-let db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};
+let db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{},subcategories:{}};
 let saveTimer=null;
 let saveInFlight=false;
 let saveQueued=false;
@@ -196,13 +205,14 @@ async function api(path,opts){
 
 function normalizeDb(x){
  if(!x||!Array.isArray(x.categories)||!Array.isArray(x.sessions)){
-  return {categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};
+  return {categories:DEFAULT.slice(),sessions:[],active:null,colors:{},subcategories:{}};
  }
  const out={
   categories:x.categories,
   sessions:x.sessions,
   active:x.active||null,
-  colors:x.colors&&typeof x.colors==="object"?x.colors:{}
+  colors:x.colors&&typeof x.colors==="object"?x.colors:{},
+  subcategories:x.subcategories&&typeof x.subcategories==="object"?x.subcategories:{}
  };
  if(out.categories.length===0) out.categories=DEFAULT.slice();
  return out;
@@ -241,7 +251,21 @@ function ensureColors(){
  Object.keys(db.colors).forEach(k=>{if(!db.categories.includes(k))delete db.colors[k]});
  if(JSON.stringify(db.colors)!==snap)save();
 }
+function ensureSubcategories(){
+ const snap=JSON.stringify(db.subcategories);
+ if(!db.categories.includes("TV")) db.categories.push("TV");
+ Object.entries(DEFAULT_SUBS).forEach(([cat,subs])=>{
+  if(db.categories.includes(cat)&&!Array.isArray(db.subcategories[cat])) db.subcategories[cat]=subs.slice();
+ });
+ Object.keys(db.subcategories).forEach(k=>{
+  if(!db.categories.includes(k)) delete db.subcategories[k];
+  else if(!Array.isArray(db.subcategories[k])) db.subcategories[k]=[];
+  else db.subcategories[k]=db.subcategories[k].map(s=>String(s).trim()).filter(Boolean);
+ });
+ if(JSON.stringify(db.subcategories)!==snap)save();
+}
 function catColor(c){return db.colors[c]||defaultColor(Math.max(0,db.categories.indexOf(c)))}
+function subsOf(cat){return Array.isArray(db.subcategories[cat])?db.subcategories[cat]:[]}
 
 function showLogin(msg){
  ready=false;
@@ -262,33 +286,59 @@ const locDate={weekday:"short",day:"numeric",month:"short"};
 const locMonth={month:"long",year:"numeric"};
 let periodAnchor=new Date();
 let selectedStatCat=null;
+let selectedStatSub=null;
 let selectedStatTag=null;
 
-function isTagCategory(c){return String(c||"").toLowerCase()===TAG_CATEGORY}
+function sessionSub(x){return(x&&x.subcategory&&String(x.subcategory).trim())||""}
 function sessionTag(x){return(x&&x.tag&&String(x.tag).trim())||""}
-function tagLabel(tag){return tag?tag:UNTAGGED}
-function knownTags(cat){
+function subLabel(s){return s?s:NOSUB}
+function tagLabel(tag){return tag?tag:NOTITLE}
+function knownTags(cat,sub){
  const set=new Set();
- db.sessions.forEach(x=>{if(x.category===cat&&sessionTag(x))set.add(sessionTag(x))});
- if(db.active&&db.active.category===cat&&sessionTag(db.active))set.add(sessionTag(db.active));
+ db.sessions.forEach(x=>{
+  if(x.category!==cat)return;
+  if(sub!==undefined&&sub!==null&&sessionSub(x)!==sub)return;
+  if(sessionTag(x))set.add(sessionTag(x));
+ });
+ if(db.active&&db.active.category===cat){
+  if(sub===undefined||sub===null||sessionSub(db.active)===sub){
+   if(sessionTag(db.active))set.add(sessionTag(db.active));
+  }
+ }
  return [...set].sort((a,b)=>a.localeCompare(b,LOCALE));
 }
-function updateTagRow(){
+function updateMetaRows(){
  const cat=$("category").value;
- const show=isTagCategory(cat);
- $("tagRow").hidden=!show;
- if(!show)return;
- $("tagList").innerHTML=knownTags(cat).map(t=>`<option value="${esc(t)}"></option>`).join("");
- if(db.active&&isTagCategory(db.active.category))$("sessionTag").value=sessionTag(db.active);
+ const subs=subsOf(cat);
+ $("subRow").hidden=!subs.length;
+ if(subs.length){
+  const cur=db.active&&db.active.category===cat?sessionSub(db.active):$("subcategory").value;
+  $("subcategory").innerHTML=`<option value="">—</option>`+subs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  if(subs.includes(cur))$("subcategory").value=cur;
+ }
+ const showTag=subs.length>0;
+ $("tagRow").hidden=!showTag;
+ if(showTag){
+  const sub=$("subcategory").value;
+  $("tagList").innerHTML=knownTags(cat,sub||null).map(t=>`<option value="${esc(t)}"></option>`).join("");
+  if(db.active&&db.active.category===cat)$("sessionTag").value=sessionTag(db.active);
+ }
 }
 function matchesFocus(x){
  if(selectedStatCat&&x.category!==selectedStatCat)return false;
+ if(selectedStatSub!==null&&sessionSub(x)!==selectedStatSub)return false;
  if(selectedStatTag!==null&&sessionTag(x)!==selectedStatTag)return false;
  return true;
 }
+function clearStatFocus(){selectedStatCat=null;selectedStatSub=null;selectedStatTag=null}
 function setStatCat(cat){
- if(selectedStatCat===cat){selectedStatCat=null;selectedStatTag=null}
- else{selectedStatCat=cat;selectedStatTag=null}
+ if(selectedStatCat===cat) clearStatFocus();
+ else{selectedStatCat=cat;selectedStatSub=null;selectedStatTag=null}
+ renderPeriod();
+}
+function setStatSub(sub){
+ if(selectedStatSub===sub){selectedStatSub=null;selectedStatTag=null}
+ else{selectedStatSub=sub;selectedStatTag=null}
  renderPeriod();
 }
 function setStatTag(tag){
@@ -304,10 +354,12 @@ function setPeriodTab(period){
  renderPeriod();
 }
 
-function categorySeconds(cat,period,anchor,tag){
+function categorySeconds(cat,period,anchor,opts){
  const {start,end}=periodBounds(period,anchor);
+ const sub=opts&&opts.sub,tag=opts&&opts.tag;
  const ss=sessionsInPeriod(period,anchor).filter(x=>{
   if(x.category!==cat)return false;
+  if(sub!==undefined&&sub!==null&&sessionSub(x)!==sub)return false;
   if(tag!==undefined&&tag!==null&&sessionTag(x)!==tag)return false;
   return true;
  });
@@ -315,12 +367,12 @@ function categorySeconds(cat,period,anchor,tag){
  ss.forEach(x=>{total+=clipSessionSeconds(x,start,end)});
  return total;
 }
-function aggregateByTag(sessions,rangeStart,rangeEnd){
+function aggregateByKey(sessions,rangeStart,rangeEnd,keyFn){
  const map={};let total=0;
  sessions.forEach(x=>{
   const t=clipSessionSeconds(x,rangeStart,rangeEnd);
   if(t<=0)return;
-  const key=sessionTag(x);
+  const key=keyFn(x);
   total+=t;map[key]=(map[key]||0)+t;
  });
  return {map,total};
@@ -508,9 +560,18 @@ function renderCategoryBars(entries,total){
  }).join("")}</div>`;
 }
 
+function sessionTitle(x){
+ const parts=[x.category];
+ if(sessionSub(x)) parts.push(sessionSub(x));
+ if(sessionTag(x)) parts.push(sessionTag(x));
+ return parts.join(" · ");
+}
+
 function renderCategories(){
  $("category").innerHTML=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
- $("catList").innerHTML=db.categories.map((c,i)=>`
+ $("catList").innerHTML=db.categories.map((c,i)=>{
+  const subs=subsOf(c);
+  return `<div class="cat-block">
   <div class="item">
    <span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</span>
    <div class="item-actions">
@@ -518,7 +579,17 @@ function renderCategories(){
     <button class="secondary renameCat" data-i="${i}" type="button">Edit</button>
     ${db.categories.length>1?`<button class="danger deleteCat" data-i="${i}" type="button">Delete</button>`:""}
    </div>
-  </div>`).join("");
+  </div>
+  <div class="subcat-panel">
+   <div class="subsection">Subcategories</div>
+   ${subs.map(s=>`<div class="sub-item"><span>${esc(s)}</span><button class="danger deleteSub" data-cat="${esc(c)}" data-sub="${esc(s)}" type="button">Remove</button></div>`).join("")||'<div class="empty" style="padding:4px 0">No subcategories yet.</div>'}
+   <div class="row" style="margin-top:8px">
+    <input class="newSubInput" data-cat="${esc(c)}" placeholder="New subcategory" maxlength="40">
+    <button class="secondary addSub" data-cat="${esc(c)}" type="button">Add</button>
+   </div>
+  </div>
+ </div>`;
+ }).join("");
 }
 
 function renderFocusStats(focus){
@@ -528,10 +599,10 @@ function renderFocusStats(focus){
  }
  all.hidden=true;box.hidden=false;
  const col=catColor(focus);
- const tag=selectedStatTag;
- const dayT=categorySeconds(focus,"day",periodAnchor,tag);
- const weekT=categorySeconds(focus,"week",periodAnchor,tag);
- const monthT=categorySeconds(focus,"month",periodAnchor,tag);
+ const opts={sub:selectedStatSub,tag:selectedStatTag};
+ const dayT=categorySeconds(focus,"day",periodAnchor,opts);
+ const weekT=categorySeconds(focus,"week",periodAnchor,opts);
+ const monthT=categorySeconds(focus,"month",periodAnchor,opts);
  $("focusDay").textContent=short(dayT);
  $("focusWeek").textContent=short(weekT);
  $("focusMonth").textContent=short(monthT);
@@ -544,22 +615,22 @@ function renderFocusStats(focus){
  });
 }
 
-function renderTagBars(entries,total,fillColor){
- const el=$("periodTags"),lab=$("periodTagsLabel");
- if(!entries.length){
-  lab.hidden=true;el.hidden=true;return;
- }
+function renderKeyedBars(elId,labId,entries,total,fillColor,kind,selected,labelFn,title){
+ const el=$(elId),lab=$(labId);
+ if(!entries.length){lab.hidden=true;el.hidden=true;return}
  lab.hidden=false;el.hidden=false;
- lab.textContent=selectedStatTag!==null?`By book · ${tagLabel(selectedStatTag)}`:"By book";
+ lab.textContent=title;
  const max=Math.max(...entries.map(e=>e[1]),1);
- el.innerHTML=`<div class="hbar-list">${entries.map(([tag,t])=>{
+ const dataAttr=kind==="sub"?"data-sub":"data-tag";
+ const pickClass=kind==="sub"?"sub-pick":"tag-pick";
+ el.innerHTML=`<div class="hbar-list">${entries.map(([key,t])=>{
   const pct=Math.round(t/Math.max(total,1)*100);
   const w=Math.max(2,(t/max)*100);
-  const cls=["hbar-row","cat-pick","tag-pick"];
-  if(selectedStatTag===tag) cls.push("selected");
-  else if(selectedStatTag!==null) cls.push("dim");
-  return `<button type="button" class="${cls.join(" ")}" data-tag="${esc(tag)}">
-   <span class="cat-name">${esc(tagLabel(tag))}</span>
+  const cls=["hbar-row","cat-pick",pickClass];
+  if(selected===key) cls.push("selected");
+  else if(selected!==null) cls.push("dim");
+  return `<button type="button" class="${cls.join(" ")}" ${dataAttr}="${esc(key)}">
+   <span class="cat-name">${esc(labelFn(key))}</span>
    <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:${esc(fillColor)}"></div></div>
    <span class="hbar-val">${short(t)} · ${pct}%</span>
   </button>`;
@@ -577,14 +648,11 @@ function renderDaySessions(sessions,rangeStart,rangeEnd){
   .filter(Boolean)
   .sort((a,b)=>a.x.start-b.x.start);
  if(!list.length) return '<div class="empty">No sessions in this day.</div>';
- return list.map(({x,t})=>{
-  const tag=sessionTag(x);
-  const title=tag?`${x.category} · ${tag}`:x.category;
-  return `<div class="day-row">
-   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(title)}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+ return list.map(({x,t})=>`
+  <div class="day-row">
+   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(sessionTitle(x))}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
    <span>${short(t)}</span>
-  </div>`;
- }).join("");
+  </div>`).join("");
 }
 
 function renderPeriod(){
@@ -596,7 +664,7 @@ function renderPeriod(){
  if(selectedStatCat&&!db.categories.includes(selectedStatCat)) selectedStatCat=null;
  const elapsedDays=period==="day"?1:Math.min(spanDays,Math.max(1,Math.ceil((Math.min(Date.now(),end.getTime())-start.getTime())/86400000)));
  const focus=selectedStatCat;
- if(selectedStatTag!==null&&(!focus||!isTagCategory(focus))) selectedStatTag=null;
+ if(!focus){selectedStatSub=null;selectedStatTag=null}
  const ssFocus=ss.filter(matchesFocus);
  const focusTotal=focus?ssFocus.reduce((a,x)=>a+clipSessionSeconds(x,start,end),0):total;
 
@@ -619,10 +687,26 @@ function renderPeriod(){
  renderDonut(entries,total);
  renderCategoryBars(entries,total);
 
- if(focus&&isTagCategory(focus)){
-  const tagAgg=aggregateByTag(ss.filter(x=>x.category===focus),start,end);
-  const tagEntries=Object.entries(tagAgg.map).sort((a,b)=>b[1]-a[1]);
-  renderTagBars(tagEntries,tagAgg.total||1,catColor(focus));
+ if(focus&&(subsOf(focus).length||ss.some(x=>x.category===focus&&sessionSub(x)))){
+  const base=ss.filter(x=>x.category===focus);
+  const subAgg=aggregateByKey(base,start,end,sessionSub);
+  const subEntries=Object.entries(subAgg.map).sort((a,b)=>b[1]-a[1]);
+  const subTitle=selectedStatSub!==null?`By subcategory · ${subLabel(selectedStatSub)}`:"By subcategory";
+  renderKeyedBars("periodSubs","periodSubsLabel",subEntries,subAgg.total||1,catColor(focus),"sub",selectedStatSub,subLabel,subTitle);
+ }else{
+  $("periodSubsLabel").hidden=true;$("periodSubs").hidden=true;
+ }
+
+ if(focus){
+  const base=ss.filter(x=>x.category===focus&&(selectedStatSub===null||sessionSub(x)===selectedStatSub));
+  const tagAgg=aggregateByKey(base,start,end,sessionTag);
+  const tagEntries=Object.entries(tagAgg.map).filter(([k,t])=>k||t>0).sort((a,b)=>b[1]-a[1]);
+  if(tagEntries.some(([k])=>k)||selectedStatSub!==null){
+   const tagTitle=selectedStatTag!==null?`By title · ${tagLabel(selectedStatTag)}`:"By title";
+   renderKeyedBars("periodTags","periodTagsLabel",tagEntries,tagAgg.total||1,catColor(focus),"tag",selectedStatTag,tagLabel,tagTitle);
+  }else{
+   $("periodTagsLabel").hidden=true;$("periodTags").hidden=true;
+  }
  }else{
   $("periodTagsLabel").hidden=true;$("periodTags").hidden=true;
  }
@@ -631,7 +715,10 @@ function renderPeriod(){
  bl.hidden=false;bd.hidden=false;
  const fillColor=focus?catColor(focus):"";
  const denom=Math.max(focus?focusTotal:total,1);
- const focusTitle=focus?(selectedStatTag!==null?`${focus} · ${tagLabel(selectedStatTag)}`:focus):"";
+ const focusParts=focus?[focus]:[];
+ if(focus&&selectedStatSub!==null) focusParts.push(subLabel(selectedStatSub));
+ if(focus&&selectedStatTag!==null) focusParts.push(tagLabel(selectedStatTag));
+ const focusTitle=focusParts.join(" · ");
 
  if(period==="day"){
   bl.textContent=focus?`Sessions · ${focusTitle}`:"Sessions";
@@ -679,51 +766,54 @@ function renderPeriod(){
 function render(){
  renderCategories();
  const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,30);
- $("history").innerHTML=recent.map((x,i)=>{
-  const tag=sessionTag(x);
-  const title=tag?`${x.category} · ${tag}`:x.category;
-  return `<div class="item">
-   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(title)}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+ $("history").innerHTML=recent.map((x,i)=>`
+  <div class="item">
+   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(sessionTitle(x))}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
    <div class="item-actions">
     <b style="padding-top:9px">${short((x.end-x.start)/1000)}</b>
     <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Edit</button>
     <button class="danger deleteSession" data-i="${db.sessions.indexOf(x)}" type="button">Delete</button>
    </div>
-  </div>`;
- }).join("")||'<div class="empty">No sessions yet.</div>';
+  </div>`).join("")||'<div class="empty">No sessions yet.</div>';
 
  if(db.active){
    const col=catColor(db.active.category);
-   const tag=sessionTag(db.active);
-   $("statusText").textContent=tag?`${db.active.category} · ${tag}`:db.active.category;
+   $("statusText").textContent=sessionTitle(db.active);
    $("statusDot").hidden=false;$("statusDot").style.background=col;
    $("clock").style.color=col;
-   $("start").disabled=true;$("stop").disabled=false;$("category").value=db.active.category;$("category").disabled=true;
+   $("start").disabled=true;$("stop").disabled=false;
+   $("category").value=db.active.category;$("category").disabled=true;
  }else{
    $("statusText").textContent="Idle";
    $("statusDot").hidden=true;$("clock").style.color="";
    $("start").disabled=false;$("stop").disabled=true;$("category").disabled=false;
  }
- updateTagRow();
- if(db.active) $("sessionTag").disabled=true;
- else $("sessionTag").disabled=false;
+ updateMetaRows();
+ const lock=!!db.active;
+ $("subcategory").disabled=lock;
+ $("sessionTag").disabled=lock;
  renderPeriod();
 }
 
 function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
 
-$("category").addEventListener("change",updateTagRow);
+$("category").addEventListener("change",updateMetaRows);
+$("subcategory").addEventListener("change",()=>{
+ const cat=$("category").value;
+ $("tagList").innerHTML=knownTags(cat,$("subcategory").value||null).map(t=>`<option value="${esc(t)}"></option>`).join("");
+});
 $("start").addEventListener("click",()=>{
  if(db.active)return;
  const category=$("category").value;
- const tag=isTagCategory(category)?$("sessionTag").value.trim():"";
- db.active={category,start:Date.now(),...(tag?{tag}:{})};save();render();
+ const subcategory=subsOf(category).length?$("subcategory").value.trim():"";
+ const tag=subsOf(category).length?$("sessionTag").value.trim():"";
+ db.active={category,start:Date.now(),...(subcategory?{subcategory}:{}),...(tag?{tag}:{})};save();render();
 });
 $("stop").addEventListener("click",()=>{
  if(!db.active)return;
  const row={category:db.active.category,start:db.active.start,end:Date.now()};
- const tag=sessionTag(db.active);
- if(tag) row.tag=tag;
+ if(sessionSub(db.active)) row.subcategory=sessionSub(db.active);
+ if(sessionTag(db.active)) row.tag=sessionTag(db.active);
  db.sessions.push(row);
  db.active=null;save();render();tick();
 });
@@ -733,6 +823,7 @@ function addCategory(){
  if(db.categories.some(x=>x.toLowerCase()===c.toLowerCase())){alert("That category already exists.");return}
  db.categories.push(c);
  db.colors[c]=defaultColor(db.categories.length-1);
+ if(!Array.isArray(db.subcategories[c])) db.subcategories[c]=DEFAULT_SUBS[c]?DEFAULT_SUBS[c].slice():[];
  $("newCat").value="";save();render();
 }
 $("addCat").addEventListener("click",addCategory);
@@ -757,10 +848,35 @@ document.addEventListener("click",e=>{
    db.categories[i]=n;
    db.colors[n]=db.colors[old]||defaultColor(i);
    delete db.colors[old];
+   if(Array.isArray(db.subcategories[old])){db.subcategories[n]=db.subcategories[old];delete db.subcategories[old]}
    db.sessions.forEach(x=>{if(x.category===old)x.category=n});
    if(db.active?.category===old)db.active.category=n;
    if(selectedStatCat===old) selectedStatCat=n;
    save();render();return;
+ }
+ const as=e.target.closest(".addSub");
+ if(as){
+   const cat=as.dataset.cat;
+   const input=as.closest(".subcat-panel")?.querySelector(".newSubInput");
+   const name=(input?input.value:"").trim();
+   if(!name){alert("Enter a subcategory name.");return}
+   if(!Array.isArray(db.subcategories[cat])) db.subcategories[cat]=[];
+   if(db.subcategories[cat].some(s=>s.toLowerCase()===name.toLowerCase())){alert("That subcategory already exists.");return}
+   db.subcategories[cat].push(name);if(input)input.value="";save();render();return;
+ }
+ const dsub=e.target.closest(".deleteSub");
+ if(dsub){
+   const cat=dsub.dataset.cat,sub=dsub.dataset.sub;
+   if(db.sessions.some(x=>x.category===cat&&sessionSub(x)===sub)||(db.active&&db.active.category===cat&&sessionSub(db.active)===sub)){
+     alert("Cannot remove a subcategory that has sessions.");return;
+   }
+   db.subcategories[cat]=(db.subcategories[cat]||[]).filter(s=>s!==sub);
+   if(selectedStatSub===sub) selectedStatSub=null;
+   save();render();return;
+ }
+ const sp=e.target.closest(".sub-pick");
+ if(sp&&sp.dataset.sub!=null){
+   setStatSub(sp.dataset.sub);return;
  }
  const st=e.target.closest(".tag-pick");
  if(st&&st.dataset.tag!=null){
@@ -777,7 +893,8 @@ document.addEventListener("click",e=>{
      alert("Cannot delete a category that has sessions. Change or delete those sessions first.");return;
    }
    delete db.colors[cat];
-   if(selectedStatCat===cat){selectedStatCat=null;selectedStatTag=null}
+   delete db.subcategories[cat];
+   if(selectedStatCat===cat) clearStatFocus();
    db.categories.splice(i,1);save();render();return;
  }
  const es=e.target.closest(".editSession");
@@ -785,9 +902,16 @@ document.addEventListener("click",e=>{
    const i=Number(es.dataset.i),x=db.sessions[i];if(!x)return;
    const cat=prompt("Category:",x.category);if(cat===null)return;
    const n=cat.trim();if(!n)return;
+   let sub=sessionSub(x);
+   const available=subsOf(n);
+   if(available.length){
+     const t=prompt(`Subcategory (${available.join(", ")}), empty for none:`,sub);if(t===null)return;
+     sub=t.trim();
+     if(sub&&!available.includes(sub)){alert("Unknown subcategory.");return}
+   }else sub="";
    let tag=sessionTag(x);
-   if(isTagCategory(n)){
-     const t=prompt("Book title (optional):",tag);if(t===null)return;
+   if(available.length){
+     const t=prompt("Title / name (optional):",tag);if(t===null)return;
      tag=t.trim();
    }else tag="";
    let dur=prompt("Duration in minutes:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
@@ -796,8 +920,10 @@ document.addEventListener("click",e=>{
    if(!db.categories.includes(n)){
      db.categories.push(n);
      db.colors[n]=defaultColor(db.categories.length-1);
+     db.subcategories[n]=[];
    }
    x.category=n;x.end=x.start+Math.round(mins*60000);
+   if(sub) x.subcategory=sub; else delete x.subcategory;
    if(tag) x.tag=tag; else delete x.tag;
    save();render();return;
  }
@@ -831,7 +957,7 @@ $("file").addEventListener("change",e=>{
    try{
     const x=JSON.parse(r.result);
     if(!Array.isArray(x.categories)||!Array.isArray(x.sessions))throw new Error();
-    db=normalizeDb(x);ensureColors();
+    db=normalizeDb(x);ensureColors();ensureSubcategories();
     clearTimeout(saveTimer);
     await flushSave();
     render();alert("Data imported.");
@@ -842,12 +968,20 @@ $("file").addEventListener("change",e=>{
 });
 $("wipe").addEventListener("click",()=>{
  if(confirm("Delete all sessions and categories?")){
-   db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{}};ensureColors();save();render();tick();
+   db={categories:DEFAULT.slice(),sessions:[],active:null,colors:{},subcategories:{}};ensureColors();ensureSubcategories();save();render();tick();
  }
 });
 $("logout").addEventListener("click",async()=>{
  try{await api("/api/logout",{method:"POST",body:"{}"})}catch(_){}
  showLogin();
+});
+document.addEventListener("keydown",e=>{
+ if(e.key!=="Enter")return;
+ const input=e.target.closest(".newSubInput");
+ if(!input)return;
+ e.preventDefault();
+ const btn=input.closest(".subcat-panel")?.querySelector(".addSub");
+ if(btn) btn.click();
 });
 
 async function doLogin(){
@@ -871,6 +1005,7 @@ async function bootApp(){
  db=normalizeDb(data);
  ready=true;
  ensureColors();
+ ensureSubcategories();
  showApp();
  render();tick();
  setSaveStatus("Saved on server. Export is an optional local backup.");

@@ -11,7 +11,11 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
 const APP_PASSWORD = process.env.APP_PASSWORD;
 const COOKIE_NAME = "ptt_auth";
-const DEFAULT_CATEGORIES = ["work", "read", "sport", "play", "free"];
+const DEFAULT_CATEGORIES = ["work", "read", "TV", "sport", "play", "free"];
+const DEFAULT_SUBCATEGORIES = {
+  read: ["book", "comic"],
+  TV: ["movie", "series"],
+};
 const STATIC_ROOT = __dirname;
 
 if (!APP_PASSWORD) {
@@ -25,7 +29,33 @@ function defaultDb() {
     sessions: [],
     active: null,
     colors: {},
+    subcategories: {
+      read: DEFAULT_SUBCATEGORIES.read.slice(),
+      TV: DEFAULT_SUBCATEGORIES.TV.slice(),
+    },
   };
+}
+
+function normalizeSubcategories(db) {
+  if (!db.subcategories || typeof db.subcategories !== "object") {
+    db.subcategories = {};
+  }
+  if (!db.categories.includes("TV")) db.categories.push("TV");
+  for (const [cat, subs] of Object.entries(DEFAULT_SUBCATEGORIES)) {
+    if (db.categories.includes(cat) && !Array.isArray(db.subcategories[cat])) {
+      db.subcategories[cat] = subs.slice();
+    }
+  }
+  for (const key of Object.keys(db.subcategories)) {
+    if (!db.categories.includes(key)) delete db.subcategories[key];
+    else if (!Array.isArray(db.subcategories[key])) db.subcategories[key] = [];
+    else {
+      db.subcategories[key] = db.subcategories[key]
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+    }
+  }
+  return db;
 }
 
 function ensureDataDir() {
@@ -47,7 +77,7 @@ function readDb() {
     if (!raw.active) raw.active = null;
     if (!raw.colors || typeof raw.colors !== "object") raw.colors = {};
     if (raw.categories.length === 0) raw.categories = DEFAULT_CATEGORIES.slice();
-    return raw;
+    return normalizeSubcategories(raw);
   } catch (err) {
     console.error("Failed to read db, resetting to defaults:", err.message);
     const db = defaultDb();
@@ -246,12 +276,16 @@ async function handleApi(req, res, pathname) {
       sendJson(res, 400, { error: "Invalid data" });
       return;
     }
-    const db = {
+    const db = normalizeSubcategories({
       categories: x.categories,
       sessions: x.sessions,
       active: x.active || null,
       colors: x.colors && typeof x.colors === "object" ? x.colors : {},
-    };
+      subcategories:
+        x.subcategories && typeof x.subcategories === "object"
+          ? x.subcategories
+          : {},
+    });
     if (db.categories.length === 0) db.categories = DEFAULT_CATEGORIES.slice();
     writeDb(db);
     sendJson(res, 200, db);
